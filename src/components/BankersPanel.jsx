@@ -26,36 +26,36 @@ export default function BankersPanel({ banker, jobs, resourceTypes }) {
   return (
     <div className="space-y-4">
       {/* Overview Banner */}
-      <div className="control-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="panel-industrial p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="w-5 h-5 text-purple-400" />
-            <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
               BANKER'S ALGORITHM — DEADLOCK AVOIDANCE
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Guarantees system remains in a SAFE STATE before granting resource requests (Need ≤ Work test).
+            Dijkstra's Deadlock Avoidance engine verifying safety state (Need ≤ Work) before committing dynamic resource claims.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div
-            className={`px-3 py-1.5 rounded-xl font-bold font-mono text-xs border flex items-center gap-2 ${
+            className={`px-3 py-1.5 rounded-lg font-bold font-mono text-xs border flex items-center gap-2 ${
               safetyResult.isSafe
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
             }`}
           >
             {safetyResult.isSafe ? (
               <>
-                <CheckCircle2 className="w-4 h-4" />
-                <span>CURRENT STATE: SAFE</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>SYSTEM STATE: SAFE</span>
               </>
             ) : (
               <>
-                <AlertTriangle className="w-4 h-4" />
-                <span>CURRENT STATE: UNSAFE</span>
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <span>SYSTEM STATE: UNSAFE (POTENTIAL DEADLOCK)</span>
               </>
             )}
           </div>

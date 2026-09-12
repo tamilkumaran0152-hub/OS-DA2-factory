@@ -1,27 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { SimulationEngine } from './simulation/simulationEngine.js';
 import { SCENARIO_TYPES } from './simulation/scenarios.js';
-import { SchedulingAlgorithm, Subsystem, OSConcept, EventType } from './simulation/types.js';
+import { SchedulingAlgorithm, Subsystem, OSConcept } from './simulation/types.js';
 
-// Components
-import Header from './components/Header.jsx';
-import ControlBar from './components/ControlBar.jsx';
-import SystemBrain from './components/SystemBrain.jsx';
-import DecisionEngine from './components/DecisionEngine.jsx';
-import FactoryFloor from './components/FactoryFloor.jsx';
-import ProcessManager from './components/ProcessManager.jsx';
-import GanttChart from './components/GanttChart.jsx';
-import EventLog from './components/EventLog.jsx';
-import BankersPanel from './components/BankersPanel.jsx';
-import ResourceAllocationGraph from './components/ResourceAllocationGraph.jsx';
-import DeadlockRecoveryModal from './components/DeadlockRecoveryModal.jsx';
-import AlgorithmComparisonLab from './components/AlgorithmComparisonLab.jsx';
-import SystemStateInspector from './components/SystemStateInspector.jsx';
+// Layout Components
+import Sidebar from './components/layout/Sidebar.jsx';
+import TopHeader from './components/layout/TopHeader.jsx';
+
+// Dedicated Page Views
+import DashboardView from './components/views/DashboardView.jsx';
+import FactoryFloorView from './components/views/FactoryFloorView.jsx';
+import ProcessManagerView from './components/views/ProcessManagerView.jsx';
+import ResourceManagerView from './components/views/ResourceManagerView.jsx';
+import SystemBrainView from './components/views/SystemBrainView.jsx';
+import SynchronizationView from './components/views/SynchronizationView.jsx';
+import BankersSafetyView from './components/views/BankersSafetyView.jsx';
+import DeadlockView from './components/views/DeadlockView.jsx';
+import RecoveryView from './components/views/RecoveryView.jsx';
+import GanttMetricsView from './components/views/GanttMetricsView.jsx';
+import AlgorithmLabView from './components/views/AlgorithmLabView.jsx';
+import EventStreamView from './components/views/EventStreamView.jsx';
+import SystemStateView from './components/views/SystemStateView.jsx';
+import VivaGuideView from './components/views/VivaGuideView.jsx';
+
+// Modals
 import JobHistoryModal from './components/JobHistoryModal.jsx';
-import VivaGuideModal from './components/VivaGuideModal.jsx';
+import DeadlockRecoveryModal from './components/DeadlockRecoveryModal.jsx';
 
 export default function App() {
-  // Initialize Engine in ref to persist across renders
   const engineRef = useRef(null);
   if (!engineRef.current) {
     engineRef.current = new SimulationEngine({
@@ -33,25 +39,26 @@ export default function App() {
   // Active snapshot for React reactivity
   const [snapshot, setSnapshot] = useState(() => engineRef.current.getSnapshot());
 
-  // UI Navigation & Modals
-  const [activeTab, setActiveTab] = useState('floor'); // 'floor' | 'deepdive' | 'benchmark'
+  // Global Navigation View State:
+  // 'dashboard' | 'factory-floor' | 'processes' | 'resources' |
+  // 'brain' | 'sync' | 'banker' | 'deadlock' | 'recovery' |
+  // 'gantt' | 'algorithms' | 'events' | 'state' | 'viva'
+  const [currentView, setCurrentView] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [inspectedJobId, setInspectedJobId] = useState(null);
-  const [isVivaModalOpen, setIsVivaModalOpen] = useState(false);
-  const [isStateSnapshotOpen, setIsStateSnapshotOpen] = useState(false);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
 
-  // Sync snapshot helper
   const syncSnapshot = useCallback(() => {
     setSnapshot(engineRef.current.getSnapshot());
   }, []);
 
-  // Discrete STEP Handler (Single event executed)
+  // Discrete STEP (Single event)
   const handleStep = useCallback(() => {
     engineRef.current.step();
     syncSnapshot();
   }, [syncSnapshot]);
 
-  // PLAY / PAUSE Handlers
+  // Play, Pause, Reset
   const handlePlay = useCallback(() => {
     engineRef.current.isRunning = true;
     syncSnapshot();
@@ -62,13 +69,12 @@ export default function App() {
     syncSnapshot();
   }, [syncSnapshot]);
 
-  // RESET Handler
   const handleReset = useCallback(() => {
     engineRef.current.reset();
     syncSnapshot();
   }, [syncSnapshot]);
 
-  // Configuration Handlers
+  // Configurations
   const handleSpeedChange = useCallback((newSpeed) => {
     engineRef.current.speed = newSpeed;
     syncSnapshot();
@@ -116,9 +122,9 @@ export default function App() {
       subsystem: Subsystem.SYNCHRONIZATION,
       osConcept: OSConcept.SEMAPHORE_SYNCHRONIZATION,
       whatHappened: `Operator queried WHY workpiece ${job.id} is blocked in WAITING state.`,
-      whyItHappened: `${job.id} requires 1 instance of ${resType}. Total capacity = ${res?.capacity || 2}, currently available = ${res?.available || 0}. Instances are currently held by [${allocatedJobs.join(', ')}]. Semaphore value S = 0.`,
+      whyItHappened: `${job.id} requires 1 instance of ${resType}. Total capacity = ${res?.capacity || 2}, currently available = ${res?.available || 0}. Machine cells are currently held by [${allocatedJobs.join(', ')}]. Semaphore value S = 0.`,
       decision: `${job.id} must remain suspended in ${resType} FIFO waiting queue until a running process invokes signal(V).`,
-      manufacturingImpact: `Ensures physical machines are not overloaded or subjected to tool collisions.`,
+      manufacturingImpact: `Enforces mutual exclusion; prevents conflicting tooling setups on the shopfloor.`,
       explanationData: {
         jobId: job.id,
         requiredResource: resType,
@@ -130,9 +136,11 @@ export default function App() {
     });
 
     syncSnapshot();
+    // Also navigate to dashboard or sync to show the explanation
+    setCurrentView('dashboard');
   }, [syncSnapshot]);
 
-  // Event stream item clicked -> Load into Decision Engine
+  // Event stream item selected -> Load into Decision Engine
   const handleSelectEvent = useCallback((event) => {
     engineRef.current.lastDecision = {
       id: event.id,
@@ -150,13 +158,13 @@ export default function App() {
       explanationData: event.explanationData,
     };
     syncSnapshot();
+    setCurrentView('dashboard');
   }, [syncSnapshot]);
 
   // Real-time discrete tick timer
   useEffect(() => {
     if (!snapshot.isRunning) return;
 
-    // Interval derived from simulation speed: 1000ms / speed (e.g. at 2x = 500ms)
     const intervalMs = Math.max(100, Math.round(1000 / snapshot.speed));
 
     const timer = setInterval(() => {
@@ -173,140 +181,197 @@ export default function App() {
 
   const inspectedJob = inspectedJobId ? snapshot.jobs[inspectedJobId] : null;
 
+  // Compute live safety state from Banker's algorithm
+  const matrices = engineRef.current.banker.buildMatrices(snapshot.jobs, snapshot.resourceTypes);
+  const safetyCheck = engineRef.current.banker.runSafetyAlgorithm(matrices);
+
+  const waitingCount = Object.values(snapshot.jobs).filter(
+    (j) => j.state === 'WAITING'
+  ).length;
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#070b12] text-slate-100 selection:bg-cyan-500 selection:text-black">
-      {/* Top Industrial Header */}
-      <Header
-        time={snapshot.time}
-        activeSubsystem={snapshot.activeSubsystem}
-        hasDeadlock={snapshot.deadlockInfo.hasDeadlock}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onOpenVivaGuide={() => setIsVivaModalOpen(true)}
-        onOpenStateSnapshot={() => setIsStateSnapshotOpen(true)}
-      />
-
-      {/* Primary Simulation Control Bar */}
-      <ControlBar
+    <div className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-black">
+      {/* 1. Permanent Left Navigation Sidebar */}
+      <Sidebar
+        currentView={currentView}
+        onSelectView={setCurrentView}
         isRunning={snapshot.isRunning}
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onStep={handleStep}
-        onReset={handleReset}
-        speed={snapshot.speed}
-        onSpeedChange={handleSpeedChange}
-        algorithm={snapshot.algorithm}
-        onAlgorithmChange={handleAlgorithmChange}
-        quantum={snapshot.quantum}
-        onQuantumChange={handleQuantumChange}
-        bankerMode={snapshot.bankerMode}
-        onBankerModeChange={handleBankerModeChange}
-        scenario={snapshot.scenario}
-        onScenarioChange={handleScenarioChange}
+        time={snapshot.time}
+        hasDeadlock={snapshot.deadlockInfo.hasDeadlock}
+        waitingCount={waitingCount}
+        activeSubsystem={snapshot.activeSubsystem}
+        isMobileOpen={isMobileMenuOpen}
+        onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
 
-      {/* Main Workspace View */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto px-6 py-4 space-y-4">
-        {/* System Brain Architecture Pipeline */}
-        <SystemBrain activeSubsystem={snapshot.activeSubsystem} />
+      {/* 2. Main Workspace Layout Area (Offset by lg:pl-64 for fixed sidebar) */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
+        {/* Top Header */}
+        <TopHeader
+          currentView={currentView}
+          time={snapshot.time}
+          isRunning={snapshot.isRunning}
+          hasDeadlock={snapshot.deadlockInfo.hasDeadlock}
+          bankerMode={snapshot.bankerMode}
+          isSafe={safetyCheck.isSafe}
+          algorithm={snapshot.algorithm}
+          quantum={snapshot.quantum}
+          speed={snapshot.speed}
+          scenario={snapshot.scenario}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onStep={handleStep}
+          onReset={handleReset}
+          onSpeedChange={handleSpeedChange}
+          onAlgorithmChange={handleAlgorithmChange}
+          onQuantumChange={handleQuantumChange}
+          onBankerModeChange={handleBankerModeChange}
+          onScenarioChange={handleScenarioChange}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          onOpenVivaGuide={() => setCurrentView('viva')}
+        />
 
-        {/* Tab 1: Operations Floor & Core Internals */}
-        {activeTab === 'floor' && (
-          <div className="space-y-4">
-            {/* Signature OS Decision Engine */}
-            <DecisionEngine
-              lastDecision={snapshot.lastDecision}
-              onInspectJob={(id) => setInspectedJobId(id)}
-            />
+        {/* Independently Scrollable Main Content */}
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
+          <div className="max-w-[1680px] mx-auto">
+            {/* VIEW 1: DASHBOARD */}
+            {currentView === 'dashboard' && (
+              <DashboardView
+                snapshot={snapshot}
+                onNavigateToView={setCurrentView}
+                onInspectJob={(id) => setInspectedJobId(id)}
+                onWhyWaiting={handleWhyWaiting}
+              />
+            )}
 
-            {/* Shopfloor Physical Workstations */}
-            <FactoryFloor
-              resourceTypes={snapshot.resourceTypes}
-              machineInstances={snapshot.machineInstances}
-              jobs={snapshot.jobs}
-              onInspectJob={(id) => setInspectedJobId(id)}
-            />
+            {/* VIEW 2: FACTORY FLOOR */}
+            {currentView === 'factory-floor' && (
+              <FactoryFloorView
+                resourceTypes={snapshot.resourceTypes}
+                machineInstances={snapshot.machineInstances}
+                jobs={snapshot.jobs}
+                onInspectJob={(id) => setInspectedJobId(id)}
+                onWhyWaiting={handleWhyWaiting}
+              />
+            )}
 
-            {/* Process Queues & PCB */}
-            <ProcessManager
-              jobs={snapshot.jobs}
-              onInspectJob={(id) => setInspectedJobId(id)}
-              onWhyWaiting={handleWhyWaiting}
-            />
+            {/* VIEW 3: PROCESS MANAGER */}
+            {currentView === 'processes' && (
+              <ProcessManagerView
+                jobs={snapshot.jobs}
+                onInspectJob={(id) => setInspectedJobId(id)}
+                onWhyWaiting={handleWhyWaiting}
+              />
+            )}
 
-            {/* Gantt Timeline & Discrete Event Stream */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <div className="lg:col-span-2">
-                <GanttChart
-                  jobs={snapshot.jobs}
-                  ganttRecords={snapshot.ganttRecords}
-                  currentTime={snapshot.time}
-                  metrics={snapshot.metrics}
-                />
-              </div>
+            {/* VIEW 4: RESOURCE MANAGER */}
+            {currentView === 'resources' && (
+              <ResourceManagerView
+                resourceTypes={snapshot.resourceTypes}
+                machineInstances={snapshot.machineInstances}
+                jobs={snapshot.jobs}
+                semaphores={snapshot.semaphores}
+                onInspectJob={(id) => setInspectedJobId(id)}
+              />
+            )}
 
-              <div>
-                <EventLog
-                  eventLog={snapshot.eventLog}
-                  onSelectEvent={handleSelectEvent}
-                />
-              </div>
-            </div>
+            {/* VIEW 5: SYSTEM BRAIN */}
+            {currentView === 'brain' && (
+              <SystemBrainView
+                activeSubsystem={snapshot.activeSubsystem}
+                snapshot={snapshot}
+              />
+            )}
+
+            {/* VIEW 6: SYNCHRONIZATION */}
+            {currentView === 'sync' && (
+              <SynchronizationView
+                semaphores={snapshot.semaphores}
+                resourceTypes={snapshot.resourceTypes}
+                jobs={snapshot.jobs}
+                eventLog={snapshot.eventLog}
+                onInspectJob={(id) => setInspectedJobId(id)}
+              />
+            )}
+
+            {/* VIEW 7: BANKER'S SAFETY */}
+            {currentView === 'banker' && (
+              <BankersSafetyView
+                banker={engineRef.current.banker}
+                jobs={snapshot.jobs}
+                resourceTypes={snapshot.resourceTypes}
+              />
+            )}
+
+            {/* VIEW 8: DEADLOCK & RAG */}
+            {currentView === 'deadlock' && (
+              <DeadlockView
+                deadlockInfo={snapshot.deadlockInfo}
+                jobs={snapshot.jobs}
+                resourceTypes={snapshot.resourceTypes}
+                onNavigateToRecovery={() => setCurrentView('recovery')}
+              />
+            )}
+
+            {/* VIEW 9: DEADLOCK RECOVERY */}
+            {currentView === 'recovery' && (
+              <RecoveryView
+                deadlockInfo={snapshot.deadlockInfo}
+                jobs={snapshot.jobs}
+                resourceTypes={snapshot.resourceTypes}
+                onExecuteRecovery={handleExecuteRecovery}
+              />
+            )}
+
+            {/* VIEW 10: GANTT & METRICS */}
+            {currentView === 'gantt' && (
+              <GanttMetricsView
+                jobs={snapshot.jobs}
+                ganttRecords={snapshot.ganttRecords}
+                currentTime={snapshot.time}
+                metrics={snapshot.metrics}
+              />
+            )}
+
+            {/* VIEW 11: ALGORITHM LAB */}
+            {currentView === 'algorithms' && (
+              <AlgorithmLabView currentScenario={snapshot.scenario} />
+            )}
+
+            {/* VIEW 12: EVENT STREAM */}
+            {currentView === 'events' && (
+              <EventStreamView
+                eventLog={snapshot.eventLog}
+                onSelectEvent={handleSelectEvent}
+              />
+            )}
+
+            {/* VIEW 13: SYSTEM STATE */}
+            {currentView === 'state' && (
+              <SystemStateView snapshot={snapshot} />
+            )}
+
+            {/* VIEW 14: VIVA GUIDE */}
+            {currentView === 'viva' && <VivaGuideView />}
           </div>
-        )}
+        </main>
+      </div>
 
-        {/* Tab 2: OS Deep Dive (RAG Deadlock & Banker's Algorithm) */}
-        {activeTab === 'deepdive' && (
-          <div className="space-y-4">
-            <ResourceAllocationGraph
-              deadlockInfo={snapshot.deadlockInfo}
-              onOpenRecoveryModal={() => setIsRecoveryModalOpen(true)}
-              jobs={snapshot.jobs}
-              resourceTypes={snapshot.resourceTypes}
-            />
-
-            <BankersPanel
-              banker={engineRef.current.banker}
-              jobs={snapshot.jobs}
-              resourceTypes={snapshot.resourceTypes}
-            />
-          </div>
-        )}
-
-        {/* Tab 3: Algorithm Comparison Lab */}
-        {activeTab === 'benchmark' && (
-          <AlgorithmComparisonLab currentScenario={snapshot.scenario} />
-        )}
-      </main>
-
-      {/* Deadlock Recovery Modal */}
-      <DeadlockRecoveryModal
-        isOpen={isRecoveryModalOpen || snapshot.deadlockInfo.hasDeadlock}
-        onClose={() => setIsRecoveryModalOpen(false)}
-        deadlockInfo={snapshot.deadlockInfo}
-        jobs={snapshot.jobs}
-        resourceTypes={snapshot.resourceTypes}
-        onExecuteRecovery={handleExecuteRecovery}
-      />
-
-      {/* System State Snapshot Modal */}
-      <SystemStateInspector
-        isOpen={isStateSnapshotOpen}
-        onClose={() => setIsStateSnapshotOpen(false)}
-        snapshot={snapshot}
-      />
-
-      {/* Click-to-Inspect Job History PCB Modal */}
+      {/* PCB Inspection Modal */}
       <JobHistoryModal
         isOpen={!!inspectedJobId}
         onClose={() => setInspectedJobId(null)}
         job={inspectedJob}
       />
 
-      {/* OS Viva Revision Guide Modal */}
-      <VivaGuideModal
-        isOpen={isVivaModalOpen}
-        onClose={() => setIsVivaModalOpen(false)}
+      {/* Pop-up Recovery Modal */}
+      <DeadlockRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        deadlockInfo={snapshot.deadlockInfo}
+        jobs={snapshot.jobs}
+        resourceTypes={snapshot.resourceTypes}
+        onExecuteRecovery={handleExecuteRecovery}
       />
     </div>
   );

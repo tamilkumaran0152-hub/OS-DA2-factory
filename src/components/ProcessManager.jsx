@@ -1,6 +1,6 @@
 import React from 'react';
 import { ProcessState } from '../simulation/types.js';
-import { Layers, Play, Clock, CheckCircle, AlertTriangle, ArrowRight, HelpCircle } from 'lucide-react';
+import { Layers, Play, Clock, CheckCircle2, AlertTriangle, HelpCircle, XCircle } from 'lucide-react';
 
 export default function ProcessManager({ jobs, onInspectJob, onWhyWaiting }) {
   const jobList = Object.values(jobs);
@@ -8,223 +8,221 @@ export default function ProcessManager({ jobs, onInspectJob, onWhyWaiting }) {
   const readyJobs = jobList.filter((j) => j.state === ProcessState.READY);
   const runningJobs = jobList.filter((j) => j.state === ProcessState.RUNNING);
   const waitingJobs = jobList.filter((j) => j.state === ProcessState.WAITING);
-  const completedJobs = jobList.filter(
-    (j) => j.state === ProcessState.COMPLETED || j.state === ProcessState.TERMINATED
-  );
+  const completedJobs = jobList.filter((j) => j.state === ProcessState.COMPLETED);
+  const terminatedJobs = jobList.filter((j) => j.state === ProcessState.TERMINATED);
+
+  const columns = [
+    {
+      title: 'READY QUEUE',
+      count: readyJobs.length,
+      jobs: readyJobs,
+      color: 'text-blue-400',
+      badgeColor: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+      dotColor: 'bg-blue-400',
+    },
+    {
+      title: 'RUNNING ON MACHINE',
+      count: runningJobs.length,
+      jobs: runningJobs,
+      color: 'text-cyan-400',
+      badgeColor: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+      dotColor: 'bg-cyan-400',
+    },
+    {
+      title: 'WAITING / BLOCKED',
+      count: waitingJobs.length,
+      jobs: waitingJobs,
+      color: 'text-amber-400',
+      badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+      dotColor: 'bg-amber-400',
+    },
+    {
+      title: 'COMPLETED & TERMINATED',
+      count: completedJobs.length + terminatedJobs.length,
+      jobs: [...completedJobs, ...terminatedJobs],
+      color: 'text-emerald-400',
+      badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      dotColor: 'bg-emerald-400',
+    },
+  ];
 
   return (
-    <div className="control-card p-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <Layers className="w-4 h-4 text-cyan-400" />
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-            PROCESS QUEUES & JOB SCHEDULING (PCB)
+    <div className="panel-industrial p-4">
+      {/* Section Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-800">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
+            PROCESS CONTROL QUEUES (PCB SCHEDULING)
           </h2>
+          <p className="text-xs text-slate-400">
+            Lifecycle state machine: CREATED → READY → RUNNING → WAITING → COMPLETED
+          </p>
         </div>
-        <div className="text-[11px] text-slate-400 font-mono">
-          Total Workpieces: {jobList.length} | Active: {runningJobs.length} | Waiting: {waitingJobs.length}
+
+        <div className="text-xs font-mono text-slate-400">
+          Total: <strong className="text-slate-200">{jobList.length}</strong> | Ready:{' '}
+          <strong className="text-blue-400">{readyJobs.length}</strong> | Running:{' '}
+          <strong className="text-cyan-400">{runningJobs.length}</strong> | Blocked:{' '}
+          <strong className="text-amber-400">{waitingJobs.length}</strong>
         </div>
       </div>
 
-      {/* 4 Process Queue Columns */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        {/* READY QUEUE */}
-        <div className="bg-slate-950/70 rounded-xl border border-blue-500/30 p-3">
-          <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-slate-800">
-            <span className="text-xs font-bold text-blue-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
-              READY QUEUE
-            </span>
-            <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
-              {readyJobs.length}
-            </span>
-          </div>
+      {/* 4 Process Columns */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {columns.map((col, idx) => (
+          <div
+            key={idx}
+            className="bg-[#0e1422] rounded-xl border border-slate-800/90 p-3 flex flex-col justify-between"
+          >
+            {/* Column Header */}
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+              <span className={`text-xs font-bold flex items-center gap-1.5 ${col.color}`}>
+                <span className={`w-2 h-2 rounded-full ${col.dotColor}`} />
+                {col.title}
+              </span>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${col.badgeColor}`}>
+                {col.count}
+              </span>
+            </div>
 
-          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-            {readyJobs.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 font-mono">
-                Ready queue empty
-              </div>
-            ) : (
-              readyJobs.map((job) => (
-                <JobCard key={job.id} job={job} onInspectJob={onInspectJob} />
-              ))
-            )}
+            {/* Process Cards List */}
+            <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+              {col.jobs.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                  Queue empty
+                </div>
+              ) : (
+                col.jobs.map((job) => (
+                  <ProcessCard
+                    key={job.id}
+                    job={job}
+                    onInspectJob={onInspectJob}
+                    onWhyWaiting={onWhyWaiting}
+                  />
+                ))
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* RUNNING */}
-        <div className="bg-slate-950/70 rounded-xl border border-cyan-500/30 p-3">
-          <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-slate-800">
-            <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              RUNNING (MACHINES)
-            </span>
-            <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
-              {runningJobs.length}
-            </span>
-          </div>
-
-          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-            {runningJobs.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 font-mono">
-                No active jobs executing
-              </div>
-            ) : (
-              runningJobs.map((job) => (
-                <JobCard key={job.id} job={job} onInspectJob={onInspectJob} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* WAITING / BLOCKED */}
-        <div className="bg-slate-950/70 rounded-xl border border-amber-500/30 p-3">
-          <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-slate-800">
-            <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              WAITING / BLOCKED
-            </span>
-            <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
-              {waitingJobs.length}
-            </span>
-          </div>
-
-          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-            {waitingJobs.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 font-mono">
-                No blocked processes
-              </div>
-            ) : (
-              waitingJobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  onInspectJob={onInspectJob}
-                  onWhyWaiting={onWhyWaiting}
-                />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* COMPLETED / TERMINATED */}
-        <div className="bg-slate-950/70 rounded-xl border border-emerald-500/30 p-3">
-          <div className="flex items-center justify-between mb-3 pb-1.5 border-b border-slate-800">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-              <CheckCircle className="w-3.5 h-3.5" />
-              COMPLETED / EXIT
-            </span>
-            <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-              {completedJobs.length}
-            </span>
-          </div>
-
-          <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-            {completedJobs.length === 0 ? (
-              <div className="py-6 text-center text-xs text-slate-500 font-mono">
-                No completed orders yet
-              </div>
-            ) : (
-              completedJobs.map((job) => (
-                <JobCard key={job.id} job={job} onInspectJob={onInspectJob} />
-              ))
-            )}
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function JobCard({ job, onInspectJob, onWhyWaiting }) {
+function ProcessCard({ job, onInspectJob, onWhyWaiting }) {
   const currentStage = job.stages[job.currentStageIndex];
+  const isRunning = job.state === ProcessState.RUNNING;
+  const isWaiting = job.state === ProcessState.WAITING;
+  const isCompleted = job.state === ProcessState.COMPLETED;
   const isTerminated = job.state === ProcessState.TERMINATED;
+
+  // Calculate progress percentage of current stage
+  const currentStageProgress =
+    isRunning && job.currentStageBurstTotal > 0
+      ? Math.round(
+          ((job.currentStageBurstTotal - job.currentStageBurstRemaining) /
+            job.currentStageBurstTotal) *
+            100
+        )
+      : isCompleted
+      ? 100
+      : 0;
 
   return (
     <div
       onClick={() => onInspectJob && onInspectJob(job.id)}
-      className="p-2.5 rounded-lg bg-slate-900/90 hover:bg-slate-800/90 border border-slate-800 hover:border-slate-700 cursor-pointer transition"
+      className="p-3 rounded-lg bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700 cursor-pointer transition shadow-sm space-y-2"
     >
-      <div className="flex items-center justify-between mb-1">
+      {/* Top: Job ID, Name, Priority */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-bold text-cyan-400">
+          <span className="font-mono text-xs font-bold text-cyan-300">
             {job.id}
           </span>
-          <span className="text-[10px] text-slate-300 font-medium truncate max-w-[90px]">
+          <span className="text-xs font-medium text-slate-200 truncate max-w-[110px]">
             {job.name}
           </span>
         </div>
 
         <span
-          className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+          className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${
             job.priority === 1
-              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
               : job.priority === 2
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              : 'bg-slate-800 text-slate-400'
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+              : 'bg-slate-800 text-slate-400 border-slate-700'
           }`}
         >
           P{job.priority}
         </span>
       </div>
 
-      {/* Stage Dots */}
-      <div className="flex items-center gap-1 my-1.5">
-        {job.stages.map((stage, idx) => {
-          const isDone = idx < job.currentStageIndex || job.state === ProcessState.COMPLETED;
-          const isCurrent = idx === job.currentStageIndex && job.state !== ProcessState.COMPLETED;
+      {/* Stage Dots Pipeline */}
+      <div className="flex items-center gap-1 py-0.5">
+        {job.stages.map((st, i) => {
+          const isDone = i < job.currentStageIndex || isCompleted;
+          const isCurrent = i === job.currentStageIndex && !isCompleted && !isTerminated;
 
           return (
             <div
-              key={idx}
-              className={`h-1 flex-1 rounded-full ${
+              key={i}
+              className={`h-1.5 flex-1 rounded-full transition-all ${
                 isDone
                   ? 'bg-emerald-400'
                   : isCurrent
-                  ? 'bg-cyan-400 animate-pulse'
+                  ? 'bg-cyan-400'
                   : 'bg-slate-800'
               }`}
-              title={`Stage ${idx + 1}: ${stage.stageName} (${stage.resourceType}, ${stage.burst}s)`}
+              title={`Stage 0${i + 1}: ${st.stageName} (${st.resourceType})`}
             />
           );
         })}
       </div>
 
-      {/* Current Operation Info */}
-      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
-        <span className="truncate max-w-[120px]">
-          {job.state === ProcessState.COMPLETED
-            ? 'Finished All Stages'
+      {/* Operation & Progress Info */}
+      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+        <span>
+          {isCompleted
+            ? 'Completed'
             : isTerminated
-            ? 'Terminated (Victim)'
+            ? 'Aborted'
             : `${currentStage?.resourceType}: ${job.currentStageBurstRemaining}s left`}
         </span>
 
-        {job.assignedInstanceId && (
-          <span className="text-cyan-300 font-bold">
-            {job.assignedInstanceId}
+        {isRunning && (
+          <span className="text-cyan-400 font-bold">
+            {currentStageProgress}%
           </span>
         )}
 
-        {job.waitingForResourceType && (
-          <span className="text-amber-400 font-bold flex items-center gap-1">
-            Waiting: {job.waitingForResourceType}
+        {isWaiting && (
+          <div className="flex items-center gap-1">
+            <span className="text-amber-400 font-bold">
+              {job.waitingForResourceType}
+            </span>
             {onWhyWaiting && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onWhyWaiting(job);
                 }}
-                className="hover:text-amber-200"
-                title="Why is this job waiting?"
+                className="text-amber-400 hover:text-amber-200"
+                title="Inspect why this process is waiting"
               >
-                <HelpCircle className="w-3 h-3 text-amber-400" />
+                <HelpCircle className="w-3.5 h-3.5" />
               </button>
             )}
-          </span>
+          </div>
         )}
       </div>
+
+      {/* Assigned machine pill if running */}
+      {job.assignedInstanceId && (
+        <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between pt-1 border-t border-slate-800/80">
+          <span>Assigned Cell:</span>
+          <span className="text-cyan-300 font-bold">{job.assignedInstanceId}</span>
+        </div>
+      )}
     </div>
   );
 }

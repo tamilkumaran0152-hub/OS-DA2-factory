@@ -1,131 +1,130 @@
 import React from 'react';
-import { Cpu, Activity, BookOpen, ShieldAlert, Layers, BarChart3, Database } from 'lucide-react';
+import { Cpu, Activity, BookOpen, ShieldAlert, Layers, BarChart3, Database, Lock, ShieldCheck, AlertOctagon, RefreshCw } from 'lucide-react';
 import { Subsystem } from '../simulation/types.js';
 
 const SUBSYSTEM_LABELS = {
-  [Subsystem.PROCESS_MGR]: { label: 'Process Manager', color: 'text-cyan-400' },
-  [Subsystem.SCHEDULER]: { label: 'CPU Scheduler', color: 'text-blue-400' },
-  [Subsystem.RESOURCE_MGR]: { label: 'Resource Manager', color: 'text-amber-400' },
-  [Subsystem.SYNCHRONIZATION]: { label: 'Semaphore Sync', color: 'text-emerald-400' },
-  [Subsystem.SAFETY_ENGINE]: { label: "Banker's Safety", color: 'text-purple-400' },
-  [Subsystem.DEADLOCK_DETECTOR]: { label: 'RAG Deadlock Det.', color: 'text-rose-400' },
-  [Subsystem.RECOVERY_MGR]: { label: 'Recovery Advisor', color: 'text-pink-400' },
-  [Subsystem.FACTORY_EXECUTION]: { label: 'Factory Floor', color: 'text-slate-300' },
+  [Subsystem.PROCESS_MGR]: { label: 'Process Mgr', color: 'text-cyan-400 bg-cyan-950/60 border-cyan-800' },
+  [Subsystem.SCHEDULER]: { label: 'CPU Scheduler', color: 'text-blue-400 bg-blue-950/60 border-blue-800' },
+  [Subsystem.RESOURCE_MGR]: { label: 'Resource Mgr', color: 'text-amber-400 bg-amber-950/60 border-amber-800' },
+  [Subsystem.SYNCHRONIZATION]: { label: 'Semaphore Sync', color: 'text-emerald-400 bg-emerald-950/60 border-emerald-800' },
+  [Subsystem.SAFETY_ENGINE]: { label: 'Banker Avoidance', color: 'text-purple-400 bg-purple-950/60 border-purple-800' },
+  [Subsystem.DEADLOCK_DETECTOR]: { label: 'RAG Deadlock', color: 'text-rose-400 bg-rose-950/60 border-rose-800' },
+  [Subsystem.RECOVERY_MGR]: { label: 'Recovery Advisor', color: 'text-pink-400 bg-pink-950/60 border-pink-800' },
+  [Subsystem.FACTORY_EXECUTION]: { label: 'Shopfloor Exec', color: 'text-slate-300 bg-slate-800 border-slate-700' },
 };
 
 export default function Header({
   time,
+  isRunning,
   activeSubsystem,
   hasDeadlock,
   activeTab,
   setActiveTab,
   onOpenVivaGuide,
-  onOpenStateSnapshot,
 }) {
-  const subInfo = SUBSYSTEM_LABELS[activeSubsystem] || { label: activeSubsystem, color: 'text-cyan-400' };
+  const subInfo = SUBSYSTEM_LABELS[activeSubsystem] || {
+    label: activeSubsystem,
+    color: 'text-cyan-400 bg-cyan-950/60 border-cyan-800',
+  };
+
+  const navItems = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'brain', label: 'System Brain' },
+    { id: 'sync', label: 'Synchronization' },
+    { id: 'banker', label: "Banker's Safety" },
+    { id: 'deadlock', label: 'Deadlock & RAG' },
+    { id: 'recovery', label: 'Recovery' },
+    { id: 'benchmark', label: 'Algorithm Lab' },
+    { id: 'state', label: 'System State' },
+  ];
 
   return (
-    <header className="border-b border-slate-800 bg-[#0a0f1c]/90 backdrop-blur-md px-6 py-3 sticky top-0 z-40">
-      <div className="max-w-[1700px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <header className="border-b border-slate-800/90 bg-[#0a0f1c] px-4 lg:px-6 py-2.5 sticky top-0 z-40">
+      <div className="max-w-[1780px] mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
         {/* Left Branding */}
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.25)]">
-            <Cpu className="w-5 h-5 text-cyan-400 animate-pulse" />
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+            <Cpu className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-300 bg-clip-text text-transparent">
+              <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
                 SMART FACTORY OS
               </h1>
-              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-cyan-950/80 text-cyan-400 border border-cyan-500/30">
-                v2.4 REAL-TIME SIM
-              </span>
-              <span className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-semibold rounded-md bg-slate-800/80 text-slate-300 border border-slate-700">
-                VIT Chennai CSE OS DA2
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                VIT Chennai • OS DA2
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              Manufacturing Resource & Process Management System Based on OS Concepts
+            <p className="text-[11px] text-slate-400">
+              Real-Time Manufacturing Operations Control Center
             </p>
           </div>
         </div>
 
-        {/* Center: System Status & Clock */}
-        <div className="flex items-center gap-4 bg-slate-900/80 px-4 py-1.5 rounded-xl border border-slate-800">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-emerald-400" />
-            <span className="text-xs text-slate-400 font-medium">SIM CLOCK:</span>
-            <span className="font-mono text-base font-bold text-cyan-300">
+        {/* Center: Top Navigation Bar */}
+        <nav className="flex items-center gap-1 overflow-x-auto py-1 scrollbar-none">
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(0,240,255,0.15)] font-semibold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900 border border-transparent'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right: Live Telemetry & Quick Actions */}
+        <div className="flex items-center gap-3 self-end xl:self-auto">
+          {/* Status Indicator */}
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+            {hasDeadlock ? (
+              <span className="flex items-center gap-1.5 text-rose-400 font-bold">
+                <span className="w-2 h-2 rounded-full bg-rose-500 status-dot-active" />
+                DEADLOCK
+              </span>
+            ) : isRunning ? (
+              <span className="flex items-center gap-1.5 text-cyan-400 font-semibold">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 status-dot-active" />
+                RUNNING
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-amber-400 font-medium">
+                <span className="w-2 h-2 rounded-full bg-amber-400" />
+                PAUSED
+              </span>
+            )}
+
+            <div className="h-3 w-[1px] bg-slate-800 mx-0.5" />
+
+            {/* Sim Time */}
+            <span className="font-mono text-xs font-bold text-slate-200">
               t = {time}s
             </span>
           </div>
 
-          <div className="h-4 w-[1px] bg-slate-700" />
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">ACTIVE SUBSYSTEM:</span>
-            <span className={`text-xs font-bold font-mono px-2 py-0.5 rounded bg-slate-800/90 border border-slate-700 ${subInfo.color}`}>
+          {/* Active Subsystem */}
+          <div className="hidden sm:flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-500">SUBSYSTEM:</span>
+            <span
+              className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${subInfo.color}`}
+            >
               {subInfo.label}
             </span>
           </div>
 
-          {hasDeadlock && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/50 text-rose-400 text-xs font-bold animate-pulse">
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span>DEADLOCK ACTIVE</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Navigation Tabs & Modal Triggers */}
-        <div className="flex items-center gap-2">
-          <nav className="flex items-center bg-slate-900/90 p-1 rounded-lg border border-slate-800 text-xs">
-            <button
-              onClick={() => setActiveTab('floor')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === 'floor'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(0,240,255,0.15)]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Floor & Internals</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('deepdive')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === 'deepdive'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(0,240,255,0.15)]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span>RAG & Banker</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('benchmark')}
-              className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === 'benchmark'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(0,240,255,0.15)]'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>Comparison Lab</span>
-            </button>
-          </nav>
-
-          <button
-            onClick={onOpenStateSnapshot}
-            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
-            title="Inspect System State Snapshot"
-          >
-            <Database className="w-4 h-4" />
-          </button>
-
+          {/* Viva Guide Button */}
           <button
             onClick={onOpenVivaGuide}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 font-semibold text-xs transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 border border-indigo-500/40 text-xs font-semibold transition"
+            title="Open OS Concepts & Manufacturing Analogies Viva Guide"
           >
             <BookOpen className="w-3.5 h-3.5" />
             <span>Viva Guide</span>

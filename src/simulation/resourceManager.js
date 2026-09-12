@@ -35,6 +35,36 @@ export class ResourceManager {
   }
 
   /**
+   * Synchronizes resource counters and semaphore values with concrete machine states
+   * Guarantees all simulation invariants:
+   * 1. resource.available + resource.allocated === resource.capacity
+   * 2. semaphore.value === resource.available
+   * 3. resource.allocated === number of physical machine instances currently assigned to jobs
+   * 4. Every IDLE machine is NOT counted as allocated
+   * 5. Every allocated machine has an actual assigned job
+   */
+  syncResourceType(resourceType) {
+    const sem = this.semaphores[resourceType];
+    const rt = this.resourceTypes[resourceType];
+    if (!sem || !rt) return;
+
+    // Count physical machine instances currently active with an assigned job
+    const assignedMachines = Object.values(this.machineInstances).filter(
+      (m) => m.type === resourceType && m.state === ResourceState.RUNNING && m.currentJobId !== null
+    );
+
+    rt.allocated = assignedMachines.length;
+    // Semaphore value and available count directly reflect free physical instances
+    sem.value = Math.max(0, rt.capacity - rt.allocated);
+    rt.available = sem.value;
+    rt.waitingQueue = [...sem.waitingQueue];
+  }
+
+  syncAll() {
+    Object.keys(this.resourceTypes).forEach((rt) => this.syncResourceType(rt));
+  }
+
+  /**
    * Job requests an instance of a Resource Type
    * Uses Counting Semaphore for concurrency control
    * 
@@ -55,7 +85,10 @@ export class ResourceManager {
       // Find a free physical machine of this type
       const machine = this.findFreeInstance(resourceType);
       if (!machine) {
-        // Fallback: This should not happen if semaphore > 0, but safeguard
+        // Fallback: This should not happen if semaphore > 0, but safeguard and rollback
+        sem.value = Math.min(sem.capacity, sem.value + 1);
+        const idx = sem.allocatedJobs.indexOf(job.id);
+        if (idx !== -1) sem.allocatedJobs.splice(idx, 1);
         throw new Error(`Inconsistency: Semaphore granted for ${resourceType} but no free machine instance found!`);
       }
 
@@ -68,15 +101,13 @@ export class ResourceManager {
       machine.currentBurstTotal = job.currentStageBurstTotal;
       machine.currentBurstRemaining = job.currentStageBurstRemaining;
 
-      // Update Resource Type counters
-      this.resourceTypes[resourceType].allocated += 1;
-      this.resourceTypes[resourceType].available = sem.value;
-      this.resourceTypes[resourceType].waitingQueue = [...sem.waitingQueue];
-
       // Update Job allocation state
       job.assignedInstanceId = machine.id;
       job.waitingForResourceType = null;
       job.currentAllocations[resourceType] = (job.currentAllocations[resourceType] || 0) + 1;
+
+      // Synchronize counters
+      this.syncResourceType(resourceType);
 
       return {
         granted: true,
@@ -86,7 +117,7 @@ export class ResourceManager {
       };
     } else {
       // Resource not available -> job must wait
-      this.resourceTypes[resourceType].waitingQueue = [...sem.waitingQueue];
+      this.syncResourceType(resourceType);
       job.waitingForResourceType = resourceType;
       job.assignedInstanceId = null;
 
@@ -112,7 +143,7 @@ export class ResourceManager {
    */
   release(resourceType, jobId, machineId, timestamp = 0) {
     const sem = this.semaphores[resourceType];
-    const machine = this.machineInstances[machineId];
+    const machine = machineId ? this.machineInstances[machineId] : null;
 
     if (machine) {
       machine.state = ResourceState.IDLE;
@@ -125,10 +156,8 @@ export class ResourceManager {
 
     const signalResult = sem.signal(jobId, timestamp);
 
-    // Update Resource Type counters
-    this.resourceTypes[resourceType].allocated = Math.max(0, this.resourceTypes[resourceType].allocated - 1);
-    this.resourceTypes[resourceType].available = sem.value;
-    this.resourceTypes[resourceType].waitingQueue = [...sem.waitingQueue];
+    // Synchronize counters
+    this.syncResourceType(resourceType);
 
     return {
       releasedMachineId: machineId,

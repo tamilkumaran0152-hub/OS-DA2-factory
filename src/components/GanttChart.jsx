@@ -5,48 +5,55 @@ import { ProcessState } from '../simulation/types.js';
 export default function GanttChart({ jobs, ganttRecords, currentTime, metrics }) {
   const [hoveredSlice, setHoveredSlice] = useState(null);
   const jobList = Object.values(jobs);
-  const maxTime = Math.max(20, currentTime + 5);
+  const maxTime = Math.max(25, currentTime + 5);
 
-  // Group records by job
   const jobRows = jobList.map((job) => {
     const records = ganttRecords.filter((r) => r.jobId === job.id);
-    const m = metrics.jobMetrics[job.id] || {};
+    const m = metrics?.jobMetrics?.[job.id] || {};
     return { job, records, metrics: m };
   });
 
   return (
-    <div className="control-card p-4">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-2 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="w-4 h-4 text-cyan-400" />
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-            PRODUCTION TIMELINE & GANTT CHART
+    <div className="panel-industrial p-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-800">
+        <div>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
+            LIVE PRODUCTION TIMELINE (GANTT CHART)
           </h2>
+          <p className="text-xs text-slate-400">
+            Chronological multi-stage task dispatch, waiting periods, and turnaround metrics
+          </p>
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-4 text-[11px] text-slate-400">
+        <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-cyan-400" /> Running
+            <span className="w-3 h-2 rounded-sm bg-cyan-400" />
+            <span>Running</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-amber-400" /> Waiting / Blocked
+            <span className="w-3 h-2 rounded-sm bg-amber-400/80" />
+            <span>Waiting / Blocked</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-emerald-400" /> Completed
+            <span className="w-3 h-2 rounded-sm bg-emerald-400" />
+            <span>Completed</span>
           </span>
-          <span className="font-mono text-cyan-300">
-            Window: [0 — {maxTime}s]
+          <span className="font-mono text-xs text-slate-300">
+            Scale: 0s — {maxTime}s
           </span>
         </div>
       </div>
 
-      {/* Gantt Timeline Area */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[700px]">
-          {/* Time axis markers */}
-          <div className="flex border-b border-slate-800 pb-1 mb-2 font-mono text-[10px] text-slate-500">
-            <div className="w-36 flex-shrink-0">Job / PCB Metric</div>
+      {/* Gantt Timeline Container */}
+      <div className="overflow-x-auto pb-2">
+        <div className="min-w-[760px]">
+          {/* Time Axis Header */}
+          <div className="flex items-center pb-2 mb-2 border-b border-slate-800 text-xs font-mono text-slate-400">
+            <div className="w-48 flex-shrink-0 font-sans font-semibold text-slate-300">
+              Workpiece / Process
+            </div>
             <div className="flex-1 relative h-4">
               {Array.from({ length: Math.ceil(maxTime / 5) + 1 }).map((_, i) => {
                 const tickTime = i * 5;
@@ -67,33 +74,33 @@ export default function GanttChart({ jobs, ganttRecords, currentTime, metrics })
           </div>
 
           {/* Job Rows */}
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             {jobRows.map(({ job, records, metrics: jm }) => (
               <div key={job.id} className="flex items-center group">
-                {/* Left: Job Info & Computed Metrics */}
-                <div className="w-36 flex-shrink-0 pr-3">
+                {/* Left Column: Job Info & Computed Metrics */}
+                <div className="w-48 flex-shrink-0 pr-4">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-bold text-cyan-400">
+                    <span className="font-mono text-xs font-bold text-cyan-300">
                       {job.id}
                     </span>
-                    <span className="text-[10px] text-slate-400 truncate max-w-[80px]">
+                    <span className="text-xs text-slate-300 font-medium truncate max-w-[100px]">
                       {job.name}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-[9px] font-mono text-slate-400 mt-0.5">
-                    <span title="Waiting Time">WT: {jm.waitingTime ?? 0}s</span>
-                    <span title="Turnaround Time">TAT: {jm.turnaroundTime ?? 0}s</span>
-                    <span title="Response Time">RT: {jm.responseTime ?? '-'}s</span>
+                  <div className="flex items-center gap-2.5 text-[10px] font-mono text-slate-400 mt-0.5">
+                    <span title="Waiting Time: WT = TAT - Burst">WT: {jm.waitingTime ?? 0}s</span>
+                    <span title="Turnaround Time: TAT = Completion - Arrival">TAT: {jm.turnaroundTime ?? 0}s</span>
+                    <span title="Response Time: RT = First Run - Arrival">RT: {jm.responseTime ?? '-'}s</span>
                   </div>
                 </div>
 
-                {/* Right: Timeline Bar */}
-                <div className="flex-1 h-7 bg-slate-950/80 rounded-lg relative overflow-hidden border border-slate-800/80">
-                  {/* Grid Lines */}
+                {/* Right Column: Timeline Track */}
+                <div className="flex-1 h-8 bg-slate-950/80 rounded-lg relative overflow-hidden border border-slate-800/80">
+                  {/* Vertical Grid Markers */}
                   {Array.from({ length: Math.ceil(maxTime / 5) }).map((_, i) => (
                     <div
                       key={i}
-                      className="absolute top-0 bottom-0 border-r border-slate-900"
+                      className="absolute top-0 bottom-0 border-r border-slate-900 pointer-events-none"
                       style={{ left: `${((i * 5) / maxTime) * 100}%` }}
                     />
                   ))}
@@ -101,7 +108,7 @@ export default function GanttChart({ jobs, ganttRecords, currentTime, metrics })
                   {/* Slices */}
                   {records.map((slice, sIdx) => {
                     const left = (slice.start / maxTime) * 100;
-                    const width = Math.max(0.5, ((slice.end - slice.start) / maxTime) * 100);
+                    const width = Math.max(0.6, ((slice.end - slice.start) / maxTime) * 100);
                     const isRunning = slice.state === ProcessState.RUNNING;
 
                     return (
@@ -109,10 +116,10 @@ export default function GanttChart({ jobs, ganttRecords, currentTime, metrics })
                         key={sIdx}
                         onMouseEnter={() => setHoveredSlice({ job, slice })}
                         onMouseLeave={() => setHoveredSlice(null)}
-                        className={`absolute top-1 bottom-1 rounded-sm transition cursor-pointer ${
+                        className={`absolute top-1 bottom-1 rounded-sm cursor-pointer transition-opacity ${
                           isRunning
-                            ? 'bg-cyan-500/80 hover:bg-cyan-400'
-                            : 'bg-amber-500/60 hover:bg-amber-400'
+                            ? 'bg-cyan-500 hover:opacity-90'
+                            : 'bg-amber-500/70 hover:opacity-90'
                         }`}
                         style={{
                           left: `${left}%`,
@@ -122,9 +129,9 @@ export default function GanttChart({ jobs, ganttRecords, currentTime, metrics })
                     );
                   })}
 
-                  {/* Current Time Cursor */}
+                  {/* Red Current Simulation Time Cursor */}
                   <div
-                    className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-10 pointer-events-none"
+                    className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-10 pointer-events-none shadow-[0_0_8px_rgba(239,68,68,0.8)]"
                     style={{ left: `${(currentTime / maxTime) * 100}%` }}
                   />
                 </div>
@@ -134,12 +141,12 @@ export default function GanttChart({ jobs, ganttRecords, currentTime, metrics })
         </div>
       </div>
 
-      {/* Tooltip on Hover */}
+      {/* Tooltip on Slice Hover */}
       {hoveredSlice && (
         <div className="mt-3 p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Info className="w-4 h-4 text-cyan-400" />
-            <span className="font-bold text-slate-200">
+            <span className="font-semibold text-slate-100">
               {hoveredSlice.job.id} ({hoveredSlice.job.name}):
             </span>
             <span className="font-mono text-cyan-300">

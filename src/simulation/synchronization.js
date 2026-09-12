@@ -21,7 +21,13 @@ export class CountingSemaphore {
   wait(jobId, timestamp = 0) {
     if (this.value > 0) {
       this.value -= 1;
-      this.allocatedJobs.push(jobId);
+      if (!this.allocatedJobs.includes(jobId)) {
+        this.allocatedJobs.push(jobId);
+      }
+      const qIdx = this.waitingQueue.indexOf(jobId);
+      if (qIdx !== -1) {
+        this.waitingQueue.splice(qIdx, 1);
+      }
       
       const record = {
         time: timestamp,
@@ -75,31 +81,30 @@ export class CountingSemaphore {
       this.allocatedJobs.splice(allocIdx, 1);
     }
 
+    // A physical unit is freed -> increment available semaphore value
+    this.value = Math.min(this.capacity, this.value + 1);
+
     if (this.waitingQueue.length > 0) {
-      // FIFO unblock: give resource immediately to the first waiting process
+      // FIFO unblock: awaken the first waiting process to READY state
       const unblockedJobId = this.waitingQueue.shift();
-      this.allocatedJobs.push(unblockedJobId);
-      // Value remains 0 because the released instance is immediately transferred to unblocked process
 
       const record = {
         time: timestamp,
-        action: 'SIGNAL_TRANSFER',
+        action: 'SIGNAL_UNBLOCK',
         releasedBy: jobId,
         unblockedJobId,
         semaphoreValueAfter: this.value,
-        reason: `Semaphore signal(V): 1 instance released by ${jobId} immediately transferred to waiting queue head ${unblockedJobId}.`,
+        reason: `Semaphore signal(V): 1 instance released by ${jobId}. Queued process ${unblockedJobId} unblocked to READY queue. Semaphore value incremented to ${this.value}.`,
       };
       this.history.push(record);
 
       return {
         unblockedJobId,
         value: this.value,
-        reason: `Semaphore signal(V): ${jobId} released ${this.resourceType}. Queued process ${unblockedJobId} unblocked and granted resource.`,
+        reason: `Semaphore signal(V): ${jobId} released ${this.resourceType}. Queued process ${unblockedJobId} unblocked and moved to READY queue. Semaphore value = ${this.value}/${this.capacity}.`,
       };
     } else {
-      // No waiting jobs -> increment available semaphore count
-      this.value = Math.min(this.capacity, this.value + 1);
-
+      // No waiting jobs -> semaphore remains incremented
       const record = {
         time: timestamp,
         action: 'SIGNAL_INCREMENT',
@@ -125,7 +130,15 @@ export class CountingSemaphore {
     if (qIdx !== -1) {
       this.waitingQueue.splice(qIdx, 1);
     }
-    return this.signal(jobId, timestamp);
+    const allocIdx = this.allocatedJobs.indexOf(jobId);
+    if (allocIdx !== -1) {
+      return this.signal(jobId, timestamp);
+    }
+    return {
+      unblockedJobId: null,
+      value: this.value,
+      reason: `Job ${jobId} removed from waiting queue without semaphore increment.`,
+    };
   }
 }
 

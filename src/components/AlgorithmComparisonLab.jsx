@@ -21,22 +21,22 @@ export default function AlgorithmComparisonLab({ currentScenario }) {
   return (
     <div className="space-y-4">
       {/* Header Banner */}
-      <div className="control-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="panel-industrial p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
-              ALGORITHM COMPARISON LABORATORY
+            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
+              SCHEDULING ALGORITHM LAB & BENCHMARK
             </h2>
           </div>
           <p className="text-xs text-slate-400">
-            Executes the exact same batch workload across 5 scheduling policies to evaluate real mathematical performance.
+            Executes identical batch workloads across 5 scheduling policies to evaluate real mathematical trade-offs.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <label className="text-xs text-slate-300 font-bold">WORKLOAD:</label>
+            <label className="text-xs text-slate-300 font-semibold">WORKLOAD:</label>
             <select
               value={selectedScenario}
               onChange={(e) => setSelectedScenario(e.target.value)}
@@ -50,7 +50,7 @@ export default function AlgorithmComparisonLab({ currentScenario }) {
 
           <button
             onClick={handleRunBenchmark}
-            className="btn-industrial btn-cyan text-xs py-1.5 px-3"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition shadow-sm"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Run Benchmark</span>
@@ -59,7 +59,7 @@ export default function AlgorithmComparisonLab({ currentScenario }) {
       </div>
 
       {/* Analysis & Winner Commentary */}
-      <div className="control-card p-4 bg-gradient-to-r from-blue-950/30 to-indigo-950/30 border-blue-500/30">
+      <div className="panel-industrial p-4 bg-gradient-to-r from-blue-950/40 to-indigo-950/40 border-blue-500/30">
         <div className="flex items-start gap-3">
           <div className="p-2 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 mt-0.5">
             <Trophy className="w-5 h-5" />
@@ -140,7 +140,7 @@ export default function AlgorithmComparisonLab({ currentScenario }) {
       {/* SVG Bar Chart Comparisons */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Average Waiting Time Chart */}
-        <div className="control-card p-4">
+        <div className="panel-industrial p-4">
           <div className="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-3">
             AVERAGE WAITING TIME (WT) COMPARISON — LOWER IS BETTER
           </div>
@@ -174,7 +174,7 @@ export default function AlgorithmComparisonLab({ currentScenario }) {
         </div>
 
         {/* Average Turnaround Time Chart */}
-        <div className="control-card p-4">
+        <div className="panel-industrial p-4">
           <div className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-3">
             AVERAGE TURNAROUND TIME (TAT) COMPARISON — LOWER IS BETTER
           </div>

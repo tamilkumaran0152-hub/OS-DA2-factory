@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, AlertTriangle, ShieldCheck, RefreshCw, Trash2, ArrowRight } from 'lucide-react';
+import { X, AlertTriangle, Trash2 } from 'lucide-react';
 
 export default function DeadlockRecoveryModal({
   isOpen,
@@ -9,12 +9,14 @@ export default function DeadlockRecoveryModal({
   resourceTypes,
   onExecuteRecovery,
 }) {
+  const [selectedVictim, setSelectedVictim] = useState(null);
+
   if (!isOpen) return null;
 
-  const { involvedJobIds = [], cycleString } = deadlockInfo;
+  const { involvedJobIds = [], cycleString } = deadlockInfo || {};
 
   // Compute victim analysis
-  const candidates = involvedJobIds.map((id) => {
+  const candidates = (involvedJobIds || []).map((id) => {
     const job = jobs[id];
     if (!job) return null;
 
@@ -50,12 +52,11 @@ export default function DeadlockRecoveryModal({
   // Sort by recommendation score descending (best victim first)
   candidates.sort((a, b) => b.score - a.score);
   const recommendedId = candidates[0]?.id;
-
-  const [selectedVictim, setSelectedVictim] = useState(recommendedId || involvedJobIds[0]);
+  const activeVictim = selectedVictim || recommendedId || involvedJobIds[0];
 
   const handleConfirm = () => {
-    if (selectedVictim) {
-      onExecuteRecovery(selectedVictim);
+    if (activeVictim) {
+      onExecuteRecovery(activeVictim);
       onClose();
     }
   };
@@ -95,7 +96,7 @@ export default function DeadlockRecoveryModal({
           {/* Victim Candidates List */}
           <div className="space-y-2.5">
             {candidates.map((cand) => {
-              const isSelected = selectedVictim === cand.id;
+              const isSelected = activeVictim === cand.id;
               const isRecommended = cand.id === recommendedId;
 
               return (

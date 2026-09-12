@@ -34,11 +34,11 @@ export default function ResourceAllocationGraph({
   return (
     <div className="space-y-4">
       {/* Top Banner */}
-      <div className="control-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="panel-industrial p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <ShieldAlert className="w-5 h-5 text-rose-400" />
-            <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider">
+            <h2 className="text-sm font-bold text-slate-100 uppercase tracking-wider">
               RESOURCE ALLOCATION GRAPH (RAG) & DEADLOCK DETECTION
             </h2>
           </div>
@@ -49,20 +49,20 @@ export default function ResourceAllocationGraph({
 
         {hasDeadlock ? (
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold animate-pulse">
               <AlertOctagon className="w-4 h-4" />
               <span>DEADLOCK CONFIRMED (CYCLE DETECTED)</span>
             </div>
             <button
               onClick={onOpenRecoveryModal}
-              className="btn-industrial btn-rose text-xs py-1.5 px-3"
+              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               <span>Resolve Deadlock</span>
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
             <CheckCircle2 className="w-4 h-4" />
             <span>NO DEADLOCK (CYCLE-FREE RAG)</span>
           </div>
@@ -71,7 +71,7 @@ export default function ResourceAllocationGraph({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left 2 Cols: Dynamic SVG RAG */}
-        <div className="control-card p-4 lg:col-span-2">
+        <div className="panel-industrial p-4 lg:col-span-2">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
               ACTIVE GRAPH TOPOLOGY
@@ -285,7 +285,7 @@ export default function ResourceAllocationGraph({
         </div>
 
         {/* Right Col: 4 Coffman Conditions Checklist */}
-        <div className="control-card p-4 flex flex-col justify-between">
+        <div className="panel-industrial p-4 flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-200 uppercase tracking-wider mb-1 flex items-center gap-2">
               <span>THE 4 COFFMAN CONDITIONS</span>
