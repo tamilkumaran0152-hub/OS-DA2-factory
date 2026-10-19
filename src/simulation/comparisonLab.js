@@ -7,7 +7,19 @@ import { SCENARIO_TYPES } from './scenarios.js';
  * Runs identical workloads across FCFS, SJF, Priority, and Round Robin
  * and returns calculated performance metrics.
  */
-export function runAlgorithmBenchmark(scenario = SCENARIO_TYPES.NORMAL_PRODUCTION, maxTicks = 45) {
+export function runAlgorithmBenchmark(
+  scenario = SCENARIO_TYPES.NORMAL_PRODUCTION,
+  maxTicks = 45,
+  machineConfig = null
+) {
+  let ticksLimit = maxTicks;
+  let config = machineConfig;
+
+  if (typeof maxTicks === 'object' && maxTicks !== null) {
+    ticksLimit = maxTicks.maxTicks ?? 45;
+    config = maxTicks.machineConfig ?? null;
+  }
+
   const algorithmsToTest = [
     { name: 'FCFS (Non-preemptive)', algo: SchedulingAlgorithm.FCFS, quantum: 2 },
     { name: 'SJF (Shortest Job First)', algo: SchedulingAlgorithm.SJF, quantum: 2 },
@@ -21,12 +33,13 @@ export function runAlgorithmBenchmark(scenario = SCENARIO_TYPES.NORMAL_PRODUCTIO
       scenario,
       algorithm: item.algo,
       quantum: item.quantum,
+      machineConfig: config,
     });
 
     let ticks = 0;
     let maxSteps = 400; // Safeguard
 
-    while (ticks < maxTicks && maxSteps > 0) {
+    while (ticks < ticksLimit && maxSteps > 0) {
       maxSteps--;
       const stepRes = sim.step();
       if (stepRes.completed) break;
@@ -38,6 +51,7 @@ export function runAlgorithmBenchmark(scenario = SCENARIO_TYPES.NORMAL_PRODUCTIO
 
     return {
       name: item.name,
+      algo: item.algo,
       algorithm: item.algo,
       quantum: item.quantum,
       ticks: snap.time,
@@ -59,16 +73,18 @@ export function runAlgorithmBenchmark(scenario = SCENARIO_TYPES.NORMAL_PRODUCTIO
   const sortedByRT = [...results].sort((a, b) => a.avgResponseTime - b.avgResponseTime);
   const bestRT = sortedByRT[0];
 
-  const winnerExplanation = bestWT.algo === SchedulingAlgorithm.SJF
-    ? 'aligning with OS scheduling theory that SJF mathematically minimizes waiting time by clearing shorter bursts first.'
-    : bestWT.algo === SchedulingAlgorithm.FCFS
-    ? 'benefiting from balanced arrival spacing where first-come orders experienced minimal queue contention.'
-    : bestWT.algo === SchedulingAlgorithm.ROUND_ROBIN
-    ? 'utilizing rapid timeslicing to rotate execution fairly across competing orders.'
-    : 'favoring critical high-priority workpieces through the production routing.';
+  const winnerExplanation =
+    bestWT.algo === SchedulingAlgorithm.SJF
+      ? 'aligning with OS scheduling theory that SJF mathematically minimizes waiting time by clearing shorter bursts first.'
+      : bestWT.algo === SchedulingAlgorithm.FCFS
+      ? 'benefiting from balanced arrival spacing where first-come orders experienced minimal queue contention.'
+      : bestWT.algo === SchedulingAlgorithm.ROUND_ROBIN
+      ? 'utilizing rapid timeslicing to rotate execution fairly across competing orders.'
+      : 'favoring critical high-priority workpieces through the production routing.';
 
   return {
     scenario,
+    machineConfig: config,
     results,
     analysis: {
       bestForWaitingTime: bestWT.name,
@@ -77,3 +93,6 @@ export function runAlgorithmBenchmark(scenario = SCENARIO_TYPES.NORMAL_PRODUCTIO
     },
   };
 }
+
+export const runAlgorithmComparison = runAlgorithmBenchmark;
+

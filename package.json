@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
+    "test": "node testPhase1.js && node testKernelConsole.js && node testPhase3UIModules.js && node testUIWorkspaces.js && node testRegressionProcessMetrics.js && node testRegressionFactorySimulator.js && node testRegressionResourceManager.js && node testRegressionDeadlockContract.js && node testRegressionMultiInstanceDeadlock.js",
     "preview": "vite preview"
   },
   "dependencies": {

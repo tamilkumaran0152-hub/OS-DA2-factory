@@ -16,6 +16,12 @@ import {
   Package,
   Cog,
   Info,
+  Factory,
+  Layers,
+  Box,
+  Terminal,
+  ArrowRight,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { ProcessState } from '../../simulation/types.js';
 import { RESOURCE_DEFINITIONS } from '../../simulation/resources.js';
@@ -33,6 +39,7 @@ export default function DashboardView({
   onNavigateToView,
   onInspectJob,
   onWhyWaiting,
+  onOpenMachineConfig,
 }) {
   const [showExplanationRegisters, setShowExplanationRegisters] = useState(false);
 
@@ -193,7 +200,230 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* 2. MIDDLE SECTION: FACTORY STATUS (LEFT) & OS DECISION ENGINE (RIGHT) */}
+      {/* 2. SIX KERNEL MODULES LAUNCHPAD */}
+      <div className="bg-[#0b101e] border border-slate-800 rounded-xl p-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-800/80">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100 flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-cyan-400" />
+              <span>OS Kernel Laboratory Modules</span>
+            </h2>
+            <p className="text-[11px] text-slate-400">
+              Direct access into the six dedicated operating system simulation and diagnostic engines
+            </p>
+          </div>
+
+          {onOpenMachineConfig && (
+            <button
+              onClick={onOpenMachineConfig}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-slate-100 text-xs font-semibold border border-slate-700/80 transition self-start sm:self-auto"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Configure Machines ({machines.length})</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Module 1: Process Scheduler */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('scheduler')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-blue-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+                    <Layers className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-blue-300 transition">
+                    Process Scheduler
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                  {snapshot.algorithm}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                FCFS, SJF, Priority, Round Robin queues, real-time Gantt timeline & quantitative comparison benchmarks.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">{jobList.filter((j) => j.state === ProcessState.READY).length} Ready, {runningCount} Running</span>
+              <span className="text-blue-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Module 2: Factory Simulator */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('simulator')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-cyan-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                    <Factory className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition">
+                    Factory Simulator
+                  </h3>
+                </div>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  snapshot.isRunning
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {snapshot.isRunning ? 'RUNNING' : 'PAUSED'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Multi-stage workpiece routing across CNC, Welding, Assembly cells, event stream & OS decision telemetry.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">Clock: t={snapshot.time}s</span>
+              <span className="text-cyan-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Module 3: Resource Manager */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('resources')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-amber-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Box className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-amber-300 transition">
+                    Resource Manager
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  {machines.length} FIXTURES
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Workstation capacities, Dijkstra counting semaphores S, wait queues & dynamic machine count provisioning.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">{waitingCount} Blocked Processes</span>
+              <span className="text-amber-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Module 4: Banker's Algorithm Lab */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('banker')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-purple-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-purple-300 transition">
+                    Banker's Algorithm Lab
+                  </h3>
+                </div>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  bankerMode ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}>
+                  {bankerMode ? 'ENFORCED' : 'OFF'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Allocation, Max, Available & Need matrices, safety check algorithm, safe sequences & interactive request test.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">Dijkstra Avoidance</span>
+              <span className="text-purple-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Module 5: Deadlock Lab */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('deadlock')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-rose-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                    <AlertOctagon className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-rose-300 transition">
+                    Deadlock Lab
+                  </h3>
+                </div>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  hasDeadlock
+                    ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                    : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                }`}>
+                  {hasDeadlock ? 'CYCLE DETECTED' : 'ACYCLIC'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Bipartite Resource Allocation Graph (RAG), DFS cycle detection, 4 Coffman conditions audit & victim recovery.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">{hasDeadlock ? 'Action Required' : '0 Deadlocks'}</span>
+              <span className="text-rose-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Module 6: Kernel Console */}
+          <div
+            onClick={() => onNavigateToView && onNavigateToView('console')}
+            className="group cursor-pointer bg-[#0e1424] hover:bg-[#121a2e] border border-slate-800 hover:border-emerald-500/50 rounded-xl p-3.5 flex flex-col justify-between transition shadow-sm"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                    <Terminal className="w-3.5 h-3.5" />
+                  </div>
+                  <h3 className="text-xs font-bold text-slate-100 group-hover:text-emerald-300 transition">
+                    Kernel Console
+                  </h3>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  TTY0 READY
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                Authoritative operating system shell: commands 'ps', 'resources', 'step [n]', 'run', 'deadlock inspect', 'banker check'.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
+              <span className="text-slate-500 font-mono">10 Built-in Commands</span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition">
+                Open <ArrowRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. FACTORY STATUS & OS DECISION ENGINE */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* LEFT LARGE CARD: FACTORY STATUS */}
         <div className="lg:col-span-7 bg-[#0e1422] border border-slate-800/90 rounded-xl p-4 flex flex-col justify-between shadow-sm">

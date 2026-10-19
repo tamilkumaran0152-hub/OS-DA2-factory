@@ -125,6 +125,93 @@ export const JOB_TEMPLATES = [
   },
 ];
 
+export const ADDITIONAL_HEAVY_LOAD_TEMPLATES = [
+  {
+    id: 'J107',
+    name: 'Battery Enclosure Tray',
+    category: 'EV Powertrain',
+    arrivalTime: 0,
+    priority: 2,
+    color: '#06b6d4',
+    stages: [
+      { stageName: 'Base Extrusion Milling', resourceType: ResourceType.CNC, burst: 2 },
+      { stageName: 'Laser Seam Welding', resourceType: ResourceType.WELDING, burst: 2 },
+      { stageName: 'Dielectric Coating', resourceType: ResourceType.PAINTING, burst: 1 },
+      { stageName: 'Module Pack Crate', resourceType: ResourceType.PACKAGING, burst: 1 },
+    ],
+    maxClaims: {
+      [ResourceType.CNC]: 1,
+      [ResourceType.WELDING]: 1,
+      [ResourceType.ASSEMBLY]: 0,
+      [ResourceType.PAINTING]: 1,
+      [ResourceType.PACKAGING]: 1,
+    },
+  },
+  {
+    id: 'J108',
+    name: 'Electric Motor Stator',
+    category: 'EV Drive Unit',
+    arrivalTime: 0,
+    priority: 1,
+    color: '#8b5cf6',
+    stages: [
+      { stageName: 'Core Lamination Slotting', resourceType: ResourceType.CNC, burst: 3 },
+      { stageName: 'Copper Hairpin Assembly', resourceType: ResourceType.ASSEMBLY, burst: 2 },
+      { stageName: 'Terminal Crate Packing', resourceType: ResourceType.PACKAGING, burst: 1 },
+    ],
+    maxClaims: {
+      [ResourceType.CNC]: 1,
+      [ResourceType.WELDING]: 0,
+      [ResourceType.ASSEMBLY]: 1,
+      [ResourceType.PAINTING]: 0,
+      [ResourceType.PACKAGING]: 1,
+    },
+  },
+  {
+    id: 'J109',
+    name: 'Suspension Control Arm',
+    category: 'Chassis Hardware',
+    arrivalTime: 0,
+    priority: 3,
+    color: '#f97316',
+    stages: [
+      { stageName: 'Billet Contour Milling', resourceType: ResourceType.CNC, burst: 2 },
+      { stageName: 'Bushing Bracket Welding', resourceType: ResourceType.WELDING, burst: 2 },
+      { stageName: 'Ball Joint Assembly', resourceType: ResourceType.ASSEMBLY, burst: 1 },
+      { stageName: 'E-Coat Rust Protection', resourceType: ResourceType.PAINTING, burst: 1 },
+    ],
+    maxClaims: {
+      [ResourceType.CNC]: 1,
+      [ResourceType.WELDING]: 1,
+      [ResourceType.ASSEMBLY]: 1,
+      [ResourceType.PAINTING]: 1,
+      [ResourceType.PACKAGING]: 0,
+    },
+  },
+  {
+    id: 'J110',
+    name: 'Instrument Panel Cross-Beam',
+    category: 'Cockpit Structural',
+    arrivalTime: 0,
+    priority: 4,
+    color: '#84cc16',
+    stages: [
+      { stageName: 'Cross-Tube Robotic Welding', resourceType: ResourceType.WELDING, burst: 2 },
+      { stageName: 'Bracket & Duct Assembly', resourceType: ResourceType.ASSEMBLY, burst: 2 },
+      { stageName: 'Final Shipping Pack', resourceType: ResourceType.PACKAGING, burst: 1 },
+    ],
+    maxClaims: {
+      [ResourceType.CNC]: 0,
+      [ResourceType.WELDING]: 1,
+      [ResourceType.ASSEMBLY]: 1,
+      [ResourceType.PAINTING]: 0,
+      [ResourceType.PACKAGING]: 1,
+    },
+  },
+];
+
+export const HEAVY_LOAD_JOB_TEMPLATES = [...JOB_TEMPLATES, ...ADDITIONAL_HEAVY_LOAD_TEMPLATES];
+
 export function createInitialJobs(templates = JOB_TEMPLATES) {
   const jobs = {};
 

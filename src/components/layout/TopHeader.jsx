@@ -8,6 +8,7 @@ import {
   Menu,
   ChevronDown,
   BookOpen,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { SchedulingAlgorithm } from '../../simulation/types.js';
 import { SCENARIO_METADATA } from '../../simulation/scenarios.js';
@@ -34,39 +35,53 @@ export default function TopHeader({
   onScenarioChange,
   onToggleMobileMenu,
   onOpenVivaGuide,
+  onOpenMachineConfig,
+  totalMachines = 9,
 }) {
   const VIEW_TITLES = {
     dashboard: {
-      title: 'Dashboard',
-      subtitle: 'Real-time manufacturing operations overview and executive KPIs',
+      title: 'Operations Overview',
+      subtitle: 'Real-time manufacturing operations overview and executive launchpad',
     },
-    'factory-floor': {
-      title: 'Factory Floor',
-      subtitle: 'Live workstation and machine allocation across 9 shopfloor cells',
+    scheduler: {
+      title: 'Process Scheduler',
+      subtitle: 'FCFS, SJF, Priority, Round Robin policies, ready queues, Gantt timeline & benchmarks',
     },
-    processes: {
-      title: 'Process Manager',
-      subtitle: 'Workpiece lifecycle states, queues, and PCB register inspection',
+    simulator: {
+      title: 'Factory Simulator',
+      subtitle: 'Shopfloor workcells, multi-stage production execution, discrete events & OS decision brain',
     },
     resources: {
       title: 'Resource Manager',
-      subtitle: 'OS resource types, physical workcells, and allocation registries',
-    },
-    brain: {
-      title: 'System Brain',
-      subtitle: 'How Smart Factory OS coordinates subsystems to make decisions',
-    },
-    sync: {
-      title: 'Synchronization',
-      subtitle: 'Dijkstra Counting Semaphores and FIFO wait buffers',
+      subtitle: 'Physical machine registries, Dijkstra counting semaphores S, wait queues & capacity configuration',
     },
     banker: {
-      title: "Banker's Safety",
-      subtitle: "Deadlock avoidance matrix checks verifying Need ≤ Work",
+      title: "Banker's Algorithm Lab",
+      subtitle: "Deadlock avoidance safety algorithm verifying Need ≤ Available Work and request safety",
     },
     deadlock: {
-      title: 'Deadlock & RAG',
-      subtitle: 'Bipartite Resource Allocation Graph and Coffman condition checks',
+      title: 'Deadlock Lab',
+      subtitle: 'Bipartite Resource Allocation Graph (RAG), 4 Coffman conditions audit & victim recovery',
+    },
+    console: {
+      title: 'Kernel Console',
+      subtitle: 'Authoritative OS command-line interface directly connected to simulation engine',
+    },
+    'factory-floor': {
+      title: 'Factory Simulator',
+      subtitle: 'Live workstation and machine allocation across shopfloor cells',
+    },
+    processes: {
+      title: 'Process Scheduler',
+      subtitle: 'Workpiece lifecycle states, queues, and PCB register inspection',
+    },
+    brain: {
+      title: 'OS Decision Brain',
+      subtitle: 'How Smart Factory OS coordinates subsystems to make scheduling decisions',
+    },
+    sync: {
+      title: 'Resource Synchronization',
+      subtitle: 'Dijkstra Counting Semaphores and FIFO wait buffers',
     },
     recovery: {
       title: 'Deadlock Recovery',
@@ -176,6 +191,21 @@ export default function TopHeader({
               <RotateCcw className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Reset</span>
             </button>
+
+            {/* Machine Config Button */}
+            {onOpenMachineConfig && (
+              <button
+                onClick={onOpenMachineConfig}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-slate-100 border border-slate-800 text-xs font-semibold transition"
+                title="Configure physical workstation capacities"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="hidden sm:inline">Machines</span>
+                <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 px-1 rounded border border-cyan-800/60">
+                  {totalMachines}
+                </span>
+              </button>
+            )}
 
             {/* Speed Pills */}
             <div className="hidden md:flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">

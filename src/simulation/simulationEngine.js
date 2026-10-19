@@ -7,7 +7,12 @@ import {
   Subsystem,
   SchedulingAlgorithm,
 } from './types.js';
-import { RESOURCE_DEFINITIONS } from './resources.js';
+import {
+  RESOURCE_DEFINITIONS,
+  DEFAULT_MACHINE_COUNTS,
+  normalizeMachineConfig,
+  getResourceDefinitions,
+} from './resources.js';
 import { scheduleNextJob } from './scheduler.js';
 import { CountingSemaphore, createSemaphores } from './synchronization.js';
 import { ResourceManager } from './resourceManager.js';
@@ -20,9 +25,12 @@ import { buildScenarioState, SCENARIO_TYPES, SCENARIO_METADATA } from './scenari
 export class SimulationEngine {
   constructor(options = {}) {
     this.scenario = options.scenario || SCENARIO_TYPES.NORMAL_PRODUCTION;
-    this.algorithm = options.algorithm || SchedulingAlgorithm.FCFS;
+    this.userExplicitAlgorithm = options.algorithm !== undefined && options.algorithm !== null;
+    this.machineConfig = options.machineConfig ? normalizeMachineConfig(options.machineConfig) : null;
+    const meta = SCENARIO_METADATA[this.scenario] || {};
+    this.algorithm = options.algorithm || meta.recommendedAlgorithm || SchedulingAlgorithm.FCFS;
     this.quantum = options.quantum || 2;
-    this.bankerMode = options.bankerMode || false;
+    this.bankerMode = options.bankerMode !== undefined ? options.bankerMode : (meta.bankerMode ?? false);
 
     // Subsystems
     this.banker = new BankersAlgorithm();
@@ -38,7 +46,8 @@ export class SimulationEngine {
     this.speed = 1; // 0.5x, 1x, 2x, 5x, 10x
     this.eventLog = [];
     this.ganttRecords = []; // Array of { jobId, start, end, state, machineId }
-    this.deadlockInfo = { hasDeadlock: false, cycleNodes: [], involvedJobIds: [], coffman: null };
+    this.deadlockInfo = this.getNormalizedDeadlockInfo();
+    this.deadlockNotified = false;
     this.bankerAudit = null;
     this.lastDecision = null;
     this.activeSubsystem = Subsystem.PROCESS_MGR;
@@ -47,24 +56,30 @@ export class SimulationEngine {
     // Build scenario data
     const meta = SCENARIO_METADATA[this.scenario] || {};
     this.bankerMode = meta.bankerMode ?? this.bankerMode;
-    if (meta.recommendedAlgorithm && !this.userExplicitAlgorithm) {
+    if (!this.userExplicitAlgorithm && meta.recommendedAlgorithm) {
       this.algorithm = meta.recommendedAlgorithm;
     }
 
-    const { jobs, resourceTypes, machineInstances } = buildScenarioState(this.scenario);
+    const { jobs, resourceTypes, machineInstances, resourceDefinitions } = buildScenarioState(
+      this.scenario,
+      this.machineConfig
+    );
     this.jobs = jobs;
     this.resourceTypes = resourceTypes;
     this.machineInstances = machineInstances;
+    this.resourceDefinitions = resourceDefinitions || getResourceDefinitions(this.machineConfig);
 
-    // Initialize Semaphores & Resource Manager
-    this.semaphores = createSemaphores(RESOURCE_DEFINITIONS);
+    // Initialize Semaphores & Resource Manager deriving from same configuration
+    this.semaphores = createSemaphores(this.resourceDefinitions);
     
     // Sync semaphores with initial allocations if scenario had pre-allocated resources
     Object.values(this.jobs).forEach((j) => {
       Object.entries(j.currentAllocations || {}).forEach(([rt, cnt]) => {
         if (cnt > 0 && this.semaphores[rt]) {
           this.semaphores[rt].value = Math.max(0, this.semaphores[rt].value - cnt);
-          this.semaphores[rt].allocatedJobs.push(j.id);
+          if (!this.semaphores[rt].allocatedJobs.includes(j.id)) {
+            this.semaphores[rt].allocatedJobs.push(j.id);
+          }
         }
       });
       if (j.state === ProcessState.WAITING && j.waitingForResourceType) {
@@ -73,6 +88,10 @@ export class SimulationEngine {
         }
       }
     });
+
+    this.readyQueue = Object.values(this.jobs)
+      .filter((j) => j.state === ProcessState.READY)
+      .map((j) => j.id);
 
     this.resourceManager = new ResourceManager(
       this.resourceTypes,
@@ -85,6 +104,10 @@ export class SimulationEngine {
     // Initial check for RAG
     this.updateDeadlockState();
 
+    const machineCount = Object.keys(this.machineInstances).length;
+    const workstationCount = Object.keys(this.resourceTypes).length;
+    const jobCount = Object.keys(this.jobs).length;
+
     // Log simulation initialization
     this.logEvent({
       eventType: 'SYSTEM_INITIALIZED',
@@ -93,16 +116,56 @@ export class SimulationEngine {
       osConcept: OSConcept.PROCESS_LIFECYCLE,
       reason: `Smart Factory OS initialized with scenario: "${meta.title || this.scenario}" under ${this.algorithm} scheduling.`,
       decision: 'Simulation Ready',
-      whatHappened: `Initialized 9 machine instances across 5 workstation types and ${Object.keys(this.jobs).length} manufacturing jobs.`,
+      whatHappened: `Initialized ${machineCount} machine instances across ${workstationCount} workstation types and ${jobCount} manufacturing jobs.`,
       whyItHappened: 'Operator loaded simulation scenario to benchmark OS concepts.',
       manufacturingImpact: 'Workstations standing by in IDLE state; jobs queued for production arrival.',
     });
   }
 
-  setScenario(scenarioType) {
+  setScenario(scenarioType, options = {}) {
+    const useRecommended =
+      typeof options === 'boolean'
+        ? options
+        : Boolean(options?.useRecommendedAlgorithm || options?.useScenarioDefault);
+
     this.scenario = scenarioType;
-    this.userExplicitAlgorithm = false;
+    if (useRecommended) {
+      this.userExplicitAlgorithm = false;
+      const meta = SCENARIO_METADATA[this.scenario] || {};
+      if (meta.recommendedAlgorithm) {
+        this.algorithm = meta.recommendedAlgorithm;
+      }
+    }
     this.reset();
+  }
+
+  useScenarioRecommendedAlgorithm() {
+    this.userExplicitAlgorithm = false;
+    const meta = SCENARIO_METADATA[this.scenario] || {};
+    if (meta.recommendedAlgorithm) {
+      this.algorithm = meta.recommendedAlgorithm;
+    }
+    this.reset();
+  }
+
+  setMachineConfig(machineConfig) {
+    const wasRunning = this.isRunning;
+    const previousTime = this.time;
+    this.machineConfig = machineConfig ? normalizeMachineConfig(machineConfig) : null;
+    this.reset();
+    if (previousTime > 0 || wasRunning) {
+      this.logEvent({
+        eventType: 'INFRASTRUCTURE_RECONFIGURED',
+        time: 0,
+        subsystem: Subsystem.RESOURCE_MGR,
+        osConcept: OSConcept.RESOURCE_ALLOCATION,
+        reason: 'Shopfloor infrastructure reconfigured; simulation reinitialized to t=0s.',
+        decision: 'Reinitialize Simulation',
+        whatHappened: 'Machine capacities were updated. The simulation was reset to ensure resource allocation consistency.',
+        whyItHappened: 'Applying new machine fixtures mid-run requires reinitializing counting semaphores and state tables.',
+        manufacturingImpact: 'Hardware fixtures reprovisioned; workpieces reset to initial arrival states.',
+      });
+    }
   }
 
   setAlgorithm(algorithm) {
@@ -175,6 +238,9 @@ export class SimulationEngine {
 
     if (arrivingJob) {
       arrivingJob.state = ProcessState.READY;
+      if (!this.readyQueue.includes(arrivingJob.id)) {
+        this.readyQueue.push(arrivingJob.id);
+      }
       arrivingJob.history.push({
         time: this.time,
         state: ProcessState.READY,
@@ -203,7 +269,15 @@ export class SimulationEngine {
     this.reconsiderWaitingQueues();
 
     // 2. Scheduler & Resource Allocation: Check if any READY job can be scheduled
-    const readyJobs = Object.values(this.jobs).filter((j) => j.state === ProcessState.READY);
+    Object.values(this.jobs).forEach((j) => {
+      if (j.state === ProcessState.READY && !this.readyQueue.includes(j.id)) {
+        this.readyQueue.push(j.id);
+      }
+    });
+    this.readyQueue = this.readyQueue.filter(
+      (id) => this.jobs[id] && this.jobs[id].state === ProcessState.READY
+    );
+    const readyJobs = this.readyQueue.map((id) => this.jobs[id]);
 
     if (readyJobs.length > 0) {
       // Find which ready jobs need which resources
@@ -264,6 +338,8 @@ export class SimulationEngine {
 
           if (!bankerResult.granted) {
             // Banker denied request to prevent unsafe state
+            const qIdx = this.readyQueue.indexOf(selectedJob.id);
+            if (qIdx !== -1) this.readyQueue.splice(qIdx, 1);
             selectedJob.state = ProcessState.WAITING;
             selectedJob.waitingForResourceType = requiredResourceType;
             selectedJob._bankerDeniedTime = this.time;
@@ -321,6 +397,8 @@ export class SimulationEngine {
 
         if (allocResult.granted) {
           // Resource granted!
+          const qIdx = this.readyQueue.indexOf(selectedJob.id);
+          if (qIdx !== -1) this.readyQueue.splice(qIdx, 1);
           selectedJob.state = ProcessState.RUNNING;
           if (selectedJob.firstStartTime === null) {
             selectedJob.firstStartTime = this.time;
@@ -355,6 +433,8 @@ export class SimulationEngine {
           return { eventExecuted: true, timeAdvanced: false };
         } else {
           // Resource unavailable -> WAITING
+          const qIdx = this.readyQueue.indexOf(selectedJob.id);
+          if (qIdx !== -1) this.readyQueue.splice(qIdx, 1);
           selectedJob.state = ProcessState.WAITING;
           selectedJob.history.push({
             time: this.time,
@@ -362,6 +442,7 @@ export class SimulationEngine {
             description: `Blocked on ${requiredResourceType} semaphore (all instances busy). Position in queue: ${allocResult.waitingQueueLength}.`,
           });
 
+          const resCap = this.resourceTypes[requiredResourceType]?.capacity || 0;
           this.logEvent({
             eventType: EventType.SEMAPHORE_WAIT,
             time: this.time,
@@ -373,36 +454,57 @@ export class SimulationEngine {
             subsystem: Subsystem.SYNCHRONIZATION,
             osConcept: OSConcept.SEMAPHORE_SYNCHRONIZATION,
             whatHappened: `${selectedJob.id} blocked waiting for ${requiredResourceType}. Queue position: ${allocResult.waitingQueueLength}.`,
-            whyItHappened: `All ${RESOURCE_DEFINITIONS[requiredResourceType].capacity} instances of ${requiredResourceType} are busy. Semaphore value = 0.`,
+            whyItHappened: `All ${resCap} instances of ${requiredResourceType} are busy. Semaphore value = 0.`,
             decision: `Invoke wait(P) block: place ${selectedJob.id} into semaphore FIFO waiting queue.`,
             manufacturingImpact: `Part staged in buffer buffer rack awaiting machine availability.`,
           });
 
           // Check if this created a deadlock
           this.updateDeadlockState();
+          if (this.deadlockInfo.hasDeadlock) {
+            if (!this.deadlockNotified) {
+              this.deadlockNotified = true;
+              this.logEvent({
+                eventType: EventType.DEADLOCK_DETECTED,
+                time: this.time,
+                subsystem: Subsystem.DEADLOCK_DETECTOR,
+                osConcept: OSConcept.DEADLOCK_DETECTION_RAG,
+                whatHappened: `DEADLOCK CONFIRMED! Trapped processes: [${this.deadlockInfo.deadlockedJobIds.join(', ')}]. Circular wait: ${this.deadlockInfo.cycleString || 'Resource loop'}.`,
+                whyItHappened: `Multi-instance resource reduction cannot satisfy pending requests from available or reclaimable units.`,
+                decision: `Halt automatic simulation advancement and flag deadlock alert for recovery analysis.`,
+                manufacturingImpact: `Critical: Production workstations permanently halted due to mutual dependency lock.`,
+                explanationData: this.deadlockInfo,
+              });
+            }
+            this.isRunning = false;
+            return { eventExecuted: true, timeAdvanced: false, deadlocked: true };
+          }
 
           return { eventExecuted: true, timeAdvanced: false };
         }
       }
     }
 
-    // 3. Deadlock Check: Check if deadlock cycle exists
+    // 3. Deadlock Check: Check if confirmed deadlock exists
     this.updateDeadlockState();
-    if (this.deadlockInfo.hasDeadlock && !this.deadlockInfo.hasBeenNotified) {
-      this.deadlockInfo.hasBeenNotified = true;
-      this.logEvent({
-        eventType: EventType.DEADLOCK_DETECTED,
-        time: this.time,
-        subsystem: Subsystem.DEADLOCK_DETECTOR,
-        osConcept: OSConcept.DEADLOCK_DETECTION_RAG,
-        whatHappened: `DEADLOCK DETECTED! Circular wait chain: ${this.deadlockInfo.cycleString}`,
-        whyItHappened: `All 4 Coffman conditions satisfied: Mutual Exclusion, Hold & Wait, No Preemption, and Circular Wait.`,
-        decision: `Flag system deadlock alert and activate Recovery Advisor for victim selection.`,
-        manufacturingImpact: `Critical: Production workstations permanently halted due to mutual dependency lock.`,
-        explanationData: this.deadlockInfo,
-      });
+    if (this.deadlockInfo.hasDeadlock) {
+      if (!this.deadlockNotified) {
+        this.deadlockNotified = true;
+        this.logEvent({
+          eventType: EventType.DEADLOCK_DETECTED,
+          time: this.time,
+          subsystem: Subsystem.DEADLOCK_DETECTOR,
+          osConcept: OSConcept.DEADLOCK_DETECTION_RAG,
+          whatHappened: `DEADLOCK CONFIRMED! Trapped processes: [${this.deadlockInfo.deadlockedJobIds.join(', ')}]. Circular wait: ${this.deadlockInfo.cycleString || 'Resource loop'}.`,
+          whyItHappened: `Multi-instance resource reduction cannot satisfy pending requests from available or reclaimable units.`,
+          decision: `Halt automatic simulation advancement and flag deadlock alert for recovery analysis.`,
+          manufacturingImpact: `Critical: Production workstations permanently halted due to mutual dependency lock.`,
+          explanationData: this.deadlockInfo,
+        });
+      }
 
-      return { eventExecuted: true, timeAdvanced: false };
+      this.isRunning = false;
+      return { eventExecuted: true, timeAdvanced: false, deadlocked: true };
     }
 
     // 4. Execution Step (Advancing simulation clock by 1 unit)
@@ -566,6 +668,11 @@ export class SimulationEngine {
         // Job completely finished!
         job.state = ProcessState.COMPLETED;
         job.completionTime = this.time;
+        job.turnaroundTime = this.time - job.arrivalTime;
+        job.waitingTime = Math.max(0, job.turnaroundTime - job.totalBurst);
+        if (job.firstStartTime !== null) {
+          job.responseTime = Math.max(0, job.firstStartTime - job.arrivalTime);
+        }
         job.assignedInstanceId = null;
         job.waitingForResourceType = null;
         Object.keys(job.currentAllocations || {}).forEach((k) => {
@@ -595,6 +702,9 @@ export class SimulationEngine {
         // Stage completed, next stage pending -> move back to READY to schedule next workstation
         const nextStage = job.stages[job.currentStageIndex];
         job.state = ProcessState.READY;
+        if (!this.readyQueue.includes(job.id)) {
+          this.readyQueue.push(job.id);
+        }
         job.currentStageBurstTotal = nextStage.burst;
         job.currentStageBurstRemaining = nextStage.burst;
         job.history.push({
@@ -624,29 +734,7 @@ export class SimulationEngine {
       if (releaseResult.unblockedJobId) {
         const unblockedJob = this.jobs[releaseResult.unblockedJobId];
         if (unblockedJob && unblockedJob.state === ProcessState.WAITING) {
-          unblockedJob.state = ProcessState.READY;
-          unblockedJob.waitingForResourceType = null;
-          unblockedJob.history.push({
-            time: this.time,
-            state: ProcessState.READY,
-            description: `Unblocked from ${releasedResourceType} semaphore queue following release by ${job.id}. Moved to READY queue.`,
-          });
-
-          this.logEvent({
-            eventType: EventType.SEMAPHORE_SIGNAL,
-            time: this.time,
-            jobId: unblockedJob.id,
-            jobName: unblockedJob.name,
-            resourceType: releasedResourceType,
-            previousState: ProcessState.WAITING,
-            newState: ProcessState.READY,
-            subsystem: Subsystem.SYNCHRONIZATION,
-            osConcept: OSConcept.SEMAPHORE_SYNCHRONIZATION,
-            whatHappened: `Semaphore signal(V) unblocked ${unblockedJob.id} for ${releasedResourceType}.`,
-            whyItHappened: `Resource released by ${job.id}; unblocked FIFO queue head.`,
-            decision: `Transition ${unblockedJob.id} from WAITING to READY.`,
-            manufacturingImpact: `Workpiece unblocked from staging rack and staged for loading.`,
-          });
+          this.allocateUnblockedJob(unblockedJob, releasedResourceType, releasedMachineId);
         }
       }
     }
@@ -664,16 +752,15 @@ export class SimulationEngine {
       job.state = ProcessState.READY;
       job.quantumRemaining = this.quantum;
 
+      // Rotate preempted job to tail of ready queue
+      const qIdx = this.readyQueue.indexOf(job.id);
+      if (qIdx !== -1) this.readyQueue.splice(qIdx, 1);
+      this.readyQueue.push(job.id);
+
       if (releaseResult.unblockedJobId) {
         const unblockedJob = this.jobs[releaseResult.unblockedJobId];
         if (unblockedJob && unblockedJob.state === ProcessState.WAITING) {
-          unblockedJob.state = ProcessState.READY;
-          unblockedJob.waitingForResourceType = null;
-          unblockedJob.history.push({
-            time: this.time,
-            state: ProcessState.READY,
-            description: `Unblocked from ${releasedRes} semaphore queue following Round Robin preemption of ${job.id}. Moved to READY queue.`,
-          });
+          this.allocateUnblockedJob(unblockedJob, releasedRes, releasedMach);
         }
       }
 
@@ -698,6 +785,23 @@ export class SimulationEngine {
     return { eventExecuted: true, timeAdvanced: true };
   }
 
+  /**
+   * Advance simulation by n discrete events (stops early on terminal state)
+   */
+  stepN(n = 1) {
+    const steps = Math.max(1, Math.floor(n));
+    let executed = 0;
+    let lastResult = null;
+    for (let i = 0; i < steps; i++) {
+      lastResult = this.step();
+      executed++;
+      if (lastResult.completed || lastResult.deadlocked || lastResult.stalled) {
+        break;
+      }
+    }
+    return { stepsExecuted: executed, lastResult };
+  }
+
   advanceClock(amount = 1) {
     this.time += amount;
     // Record waiting slices for Gantt
@@ -719,18 +823,104 @@ export class SimulationEngine {
   }
 
   /**
-   * Update RAG and check for cycle & Coffman conditions
+   * Returns a canonical, fully-normalized deadlock analysis object in every state.
+   * Guarantees non-null fields for hasDeadlock, hasCycle, cycleNodes, cycleString,
+   * involvedJobIds, deadlockedJobIds, cycleJobIds, reductionSequence, coffman, and rag.
+   */
+  getNormalizedDeadlockInfo() {
+    if (
+      this.deadlockInfo &&
+      this.deadlockInfo.rag &&
+      Array.isArray(this.deadlockInfo.rag.nodes) &&
+      this.deadlockInfo.coffman &&
+      Array.isArray(this.deadlockInfo.coffman.conditions)
+    ) {
+      return this.deadlockInfo;
+    }
+    if (this.deadlockDetector && this.jobs && this.resourceTypes) {
+      this.updateDeadlockState();
+      if (
+        this.deadlockInfo &&
+        this.deadlockInfo.rag &&
+        this.deadlockInfo.coffman
+      ) {
+        return this.deadlockInfo;
+      }
+    }
+    return {
+      hasDeadlock: false,
+      hasCycle: false,
+      cycleNodes: [],
+      cycleString: '',
+      involvedJobIds: [],
+      deadlockedJobIds: [],
+      cycleJobIds: [],
+      involvedResourceTypes: [],
+      reductionSequence: [],
+      coffman: {
+        allConditionsMet: false,
+        isDeadlocked: false,
+        conditions: [
+          {
+            name: 'Mutual Exclusion',
+            satisfied: true,
+            explanation:
+              'Factory machine fixtures (CNC, Welding, Assembly, Painting, Packaging) are non-shareable resources; each physical machine instance can only process one workpiece fixture exclusively at a time.',
+          },
+          {
+            name: 'Hold and Wait',
+            satisfied: false,
+            involvedJobs: [],
+            explanation: 'No process is currently holding resources while simultaneously waiting for another.',
+          },
+          {
+            name: 'No Preemption',
+            satisfied: true,
+            explanation:
+              'Workpieces mounted in active machine fixtures cannot be preempted or forcibly unloaded without damaging the product; resources are held until voluntary stage completion.',
+          },
+          {
+            name: 'Circular Wait',
+            satisfied: false,
+            cyclePath: '',
+            explanation: 'No circular wait cycle detected in the Resource Allocation Graph.',
+          },
+        ],
+      },
+      rag: { nodes: [], edges: [], adjacencyList: {} },
+    };
+  }
+
+  /**
+   * Update RAG, detect cycles, and run multi-instance deadlock detection & Coffman audit
    */
   updateDeadlockState() {
+    if (!this.deadlockDetector || !this.jobs || !this.resourceTypes) {
+      this.deadlockInfo = this.getNormalizedDeadlockInfo();
+      return;
+    }
     const rag = this.deadlockDetector.buildRAG(this.jobs, this.resourceTypes);
     const cycle = this.deadlockDetector.detectCycle(rag);
-    const coffman = this.deadlockDetector.evaluateCoffmanConditions(this.jobs, this.resourceTypes, cycle);
+    const deadlock = this.deadlockDetector.detectDeadlock(this.jobs, this.resourceTypes);
+    const coffman = this.deadlockDetector.evaluateCoffmanConditions(this.jobs, this.resourceTypes, cycle, deadlock);
 
     this.deadlockInfo = {
-      ...cycle,
+      hasDeadlock: deadlock.hasDeadlock,
+      hasCycle: cycle.hasCycle,
+      cycleNodes: cycle.cycleNodes,
+      cycleString: cycle.cycleString,
+      involvedJobIds: deadlock.hasDeadlock ? deadlock.deadlockedJobIds : cycle.involvedJobIds,
+      deadlockedJobIds: deadlock.deadlockedJobIds,
+      cycleJobIds: cycle.involvedJobIds,
+      involvedResourceTypes: cycle.involvedResourceTypes,
+      reductionSequence: deadlock.unblockedSequence,
       coffman,
       rag,
     };
+
+    if (!deadlock.hasDeadlock) {
+      this.deadlockNotified = false;
+    }
   }
 
   /**
@@ -744,8 +934,14 @@ export class SimulationEngine {
       this.time
     );
 
+    const vIdx = this.readyQueue.indexOf(victimJobId);
+    if (vIdx !== -1) this.readyQueue.splice(vIdx, 1);
+    result.unblockedJobs.forEach((u) => {
+      if (!this.readyQueue.includes(u.jobId)) this.readyQueue.push(u.jobId);
+    });
+
     this.deadlockInfo.hasDeadlock = false;
-    this.deadlockInfo.hasBeenNotified = false;
+    this.deadlockNotified = false;
     this.updateDeadlockState();
 
     this.logEvent({
@@ -769,21 +965,75 @@ export class SimulationEngine {
    * If physical machine capacity is available and not already spoken for by READY jobs,
    * unblocks waiting jobs to READY state.
    */
+  /**
+   * Directly and atomically hands over a released/available machine to an unblocked waiting job.
+   * Guarantees zero idle gap where available > 0 while waiting queue has eligible jobs.
+   */
+  allocateUnblockedJob(unblockedJob, resourceType, machineId = null) {
+    const allocResult = this.resourceManager.allocate(
+      resourceType,
+      unblockedJob,
+      machineId,
+      this.time
+    );
+
+    if (allocResult.granted) {
+      const qIdx = this.readyQueue.indexOf(unblockedJob.id);
+      if (qIdx !== -1) this.readyQueue.splice(qIdx, 1);
+
+      unblockedJob.state = ProcessState.RUNNING;
+      unblockedJob.waitingForResourceType = null;
+      if (unblockedJob.firstStartTime === null) {
+        unblockedJob.firstStartTime = this.time;
+      }
+      if (this.algorithm === SchedulingAlgorithm.ROUND_ROBIN) {
+        unblockedJob.quantumRemaining = this.quantum;
+      }
+
+      const stage = unblockedJob.stages[unblockedJob.currentStageIndex];
+      unblockedJob.history.push({
+        time: this.time,
+        state: ProcessState.RUNNING,
+        description: `Unblocked from ${resourceType} semaphore and allocated machine ${allocResult.machineId}. Stage ${unblockedJob.currentStageIndex + 1}: ${stage?.stageName}.`,
+      });
+
+      this.logEvent({
+        eventType: EventType.SEMAPHORE_SIGNAL,
+        time: this.time,
+        jobId: unblockedJob.id,
+        jobName: unblockedJob.name,
+        resourceType,
+        machineId: allocResult.machineId,
+        previousState: ProcessState.WAITING,
+        newState: ProcessState.RUNNING,
+        subsystem: Subsystem.SYNCHRONIZATION,
+        osConcept: OSConcept.SEMAPHORE_SYNCHRONIZATION,
+        whatHappened: `Semaphore signal(V) handed over ${allocResult.machineId} to unblocked ${unblockedJob.id}.`,
+        whyItHappened: `Machine ${machineId || allocResult.machineId} released; immediately allocated to FIFO waiting queue head.`,
+        decision: `Atomic semaphore signal(V) & allocate: ${unblockedJob.id} moved WAITING → RUNNING on ${allocResult.machineId}.`,
+        manufacturingImpact: `Continuous flow handover: workpiece loaded immediately into vacated ${allocResult.machineId} cell without idle gap.`,
+      });
+      return true;
+    } else {
+      unblockedJob.state = ProcessState.READY;
+      unblockedJob.waitingForResourceType = null;
+      if (!this.readyQueue.includes(unblockedJob.id)) {
+        this.readyQueue.push(unblockedJob.id);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Reconsiders FIFO waiting queues for each resource type.
+   * If physical machine capacity is available, atomically allocates to waiting jobs.
+   */
   reconsiderWaitingQueues() {
     for (const [resType, rt] of Object.entries(this.resourceTypes)) {
       const sem = this.semaphores[resType];
       if (!sem || sem.waitingQueue.length === 0) continue;
 
-      // Count READY jobs that will request this resource upon scheduling
-      const readyJobsNeedingRes = Object.values(this.jobs).filter(
-        (j) =>
-          j.state === ProcessState.READY &&
-          j.stages[j.currentStageIndex]?.resourceType === resType
-      ).length;
-
-      let availableSlots = rt.available - readyJobsNeedingRes;
-
-      while (availableSlots > 0 && sem.waitingQueue.length > 0) {
+      while (rt.available > 0 && sem.waitingQueue.length > 0) {
         const nextJobId = sem.waitingQueue.shift();
         const nextJob = this.jobs[nextJobId];
         if (nextJob && nextJob.state === ProcessState.WAITING) {
@@ -793,31 +1043,11 @@ export class SimulationEngine {
             break;
           }
 
-          nextJob.state = ProcessState.READY;
-          nextJob.waitingForResourceType = null;
-          nextJob.history.push({
-            time: this.time,
-            state: ProcessState.READY,
-            description: `Workstation ${resType} has available capacity. Moved from WAITING to READY queue.`,
-          });
-
-          this.logEvent({
-            eventType: EventType.SEMAPHORE_SIGNAL,
-            time: this.time,
-            jobId: nextJob.id,
-            jobName: nextJob.name,
-            resourceType: resType,
-            previousState: ProcessState.WAITING,
-            newState: ProcessState.READY,
-            subsystem: Subsystem.SYNCHRONIZATION,
-            osConcept: OSConcept.SEMAPHORE_SYNCHRONIZATION,
-            whatHappened: `Workstation ${resType} has available capacity; unblocked ${nextJob.id}.`,
-            whyItHappened: `Free physical instance available (${availableSlots} slot(s)). Awakened waiting process.`,
-            decision: `Transition ${nextJob.id} from WAITING to READY.`,
-            manufacturingImpact: `Workpiece transferred to ready queue for workstation scheduling.`,
-          });
-
-          availableSlots--;
+          const freeMach = this.resourceManager.findFreeInstance(resType);
+          const allocated = this.allocateUnblockedJob(nextJob, resType, freeMach?.id || null);
+          if (!allocated) {
+            break;
+          }
         }
       }
       this.resourceManager.syncResourceType(resType);
@@ -888,20 +1118,43 @@ export class SimulationEngine {
           `Invariant 5 violation for ${resType}: RUNNING machine has no assigned job: ${runningWithoutJob.map((m) => m.id).join(', ')}`
         );
       }
+
+      // 6. Semaphore allocatedJobs must match assigned machines
+      const assignedJobIds = assignedMachines.map((m) => m.currentJobId).sort();
+      const semJobIds = [...(sem?.allocatedJobs || [])].sort();
+      if (JSON.stringify(assignedJobIds) !== JSON.stringify(semJobIds)) {
+        violations.push(
+          `Invariant 6 violation for ${resType}: assigned machines [${assignedJobIds.join(',')}] !== semaphore.allocatedJobs [${semJobIds.join(',')}]`
+        );
+      }
+
+      // 8. No stable idle+available resource with eligible waiting jobs in the same resource queue
+      if (available > 0 && sem?.waitingQueue?.length > 0) {
+        const eligibleWaitingJobs = sem.waitingQueue.filter((jId) => {
+          const j = this.jobs[jId];
+          return j && (!this.bankerMode || j._bankerDeniedTime !== this.time);
+        });
+
+        if (eligibleWaitingJobs.length > 0) {
+          violations.push(
+            `Invariant 8 violation for ${resType}: ${available} instance(s) available while eligible jobs [${eligibleWaitingJobs.join(', ')}] remain blocked in waiting queue`
+          );
+        }
+      }
     }
 
-    // 6. Every RUNNING job must have an actual machine assignment
+    // 7. Every RUNNING job must have an actual machine assignment
     for (const job of Object.values(this.jobs)) {
       if (job.state === ProcessState.RUNNING) {
         if (!job.assignedInstanceId) {
           violations.push(
-            `Invariant 6 violation for ${job.id}: State is RUNNING but assignedInstanceId is null`
+            `Invariant 7 violation for ${job.id}: State is RUNNING but assignedInstanceId is null`
           );
         } else {
           const machine = this.machineInstances[job.assignedInstanceId];
           if (!machine || machine.currentJobId !== job.id || machine.state !== ResourceState.RUNNING) {
             violations.push(
-              `Invariant 6 violation for ${job.id}: Machine ${job.assignedInstanceId} state mismatch`
+              `Invariant 7 violation for ${job.id}: Machine ${job.assignedInstanceId} state mismatch`
             );
           }
         }
@@ -920,6 +1173,18 @@ export class SimulationEngine {
   getSnapshot() {
     const metrics = calculateMetrics(this.jobs, this.machineInstances, this.time);
 
+    // Synchronize authoritative process metrics into snapshot.jobs
+    const jobsWithMetrics = {};
+    Object.entries(this.jobs).forEach(([id, job]) => {
+      const jm = metrics.jobMetrics[id];
+      jobsWithMetrics[id] = {
+        ...job,
+        waitingTime: jm?.waitingTime ?? 0,
+        turnaroundTime: jm?.turnaroundTime ?? null,
+        responseTime: jm?.responseTime ?? null,
+      };
+    });
+
     return {
       time: this.time,
       isRunning: this.isRunning,
@@ -928,15 +1193,16 @@ export class SimulationEngine {
       algorithm: this.algorithm,
       quantum: this.quantum,
       bankerMode: this.bankerMode,
+      machineConfig: this.machineConfig ? { ...this.machineConfig } : null,
       activeSubsystem: this.activeSubsystem,
-      jobs: { ...this.jobs },
+      jobs: jobsWithMetrics,
       resourceTypes: { ...this.resourceTypes },
       machineInstances: { ...this.machineInstances },
       semaphores: this.semaphores,
       eventLog: [...this.eventLog],
       lastDecision: this.lastDecision,
       ganttRecords: [...this.ganttRecords],
-      deadlockInfo: this.deadlockInfo,
+      deadlockInfo: this.getNormalizedDeadlockInfo(),
       bankerAudit: this.bankerAudit,
       metrics,
     };

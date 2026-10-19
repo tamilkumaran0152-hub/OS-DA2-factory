@@ -3,24 +3,17 @@ import { SimulationEngine } from './simulation/simulationEngine.js';
 import { SCENARIO_TYPES } from './simulation/scenarios.js';
 import { SchedulingAlgorithm, Subsystem, OSConcept } from './simulation/types.js';
 
-// Layout Components
-import Sidebar from './components/layout/Sidebar.jsx';
-import TopHeader from './components/layout/TopHeader.jsx';
+// Clean Landing Page & Dedicated Workspaces
+import HomePage from './components/redesign/HomePage.jsx';
+import WorkspaceLayout from './components/workspaces/WorkspaceLayout.jsx';
+import SchedulerWorkspace from './components/workspaces/SchedulerWorkspace.jsx';
+import FactoryWorkspace from './components/workspaces/FactoryWorkspace.jsx';
+import ResourcesWorkspace from './components/workspaces/ResourcesWorkspace.jsx';
+import BankerWorkspace from './components/workspaces/BankerWorkspace.jsx';
+import DeadlockWorkspace from './components/workspaces/DeadlockWorkspace.jsx';
+import ConsoleWorkspace from './components/workspaces/ConsoleWorkspace.jsx';
 
-// Dedicated Page Views
-import DashboardView from './components/views/DashboardView.jsx';
-import FactoryFloorView from './components/views/FactoryFloorView.jsx';
-import ProcessManagerView from './components/views/ProcessManagerView.jsx';
-import ResourceManagerView from './components/views/ResourceManagerView.jsx';
-import SystemBrainView from './components/views/SystemBrainView.jsx';
-import SynchronizationView from './components/views/SynchronizationView.jsx';
-import BankersSafetyView from './components/views/BankersSafetyView.jsx';
-import DeadlockView from './components/views/DeadlockView.jsx';
-import RecoveryView from './components/views/RecoveryView.jsx';
-import GanttMetricsView from './components/views/GanttMetricsView.jsx';
-import AlgorithmLabView from './components/views/AlgorithmLabView.jsx';
-import EventStreamView from './components/views/EventStreamView.jsx';
-import SystemStateView from './components/views/SystemStateView.jsx';
+// Theory & Viva Guide
 import VivaGuideView from './components/views/VivaGuideView.jsx';
 
 // Modals
@@ -39,12 +32,11 @@ export default function App() {
   // Active snapshot for React reactivity
   const [snapshot, setSnapshot] = useState(() => engineRef.current.getSnapshot());
 
-  // Global Navigation View State:
-  // 'dashboard' | 'factory-floor' | 'processes' | 'resources' |
-  // 'brain' | 'sync' | 'banker' | 'deadlock' | 'recovery' |
-  // 'gantt' | 'algorithms' | 'events' | 'state' | 'viva'
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Global Navigation: 'home' (default) | 'scheduler' | 'simulator' | 'resources' | 'banker' | 'deadlock' | 'console' | 'viva'
+  const [currentView, setCurrentView] = useState('home');
+  const currentViewRef = useRef(currentView);
+  currentViewRef.current = currentView;
+
   const [inspectedJobId, setInspectedJobId] = useState(null);
   const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
 
@@ -74,7 +66,6 @@ export default function App() {
     syncSnapshot();
   }, [syncSnapshot]);
 
-  // Configurations
   const handleSpeedChange = useCallback((newSpeed) => {
     engineRef.current.speed = newSpeed;
     syncSnapshot();
@@ -97,6 +88,12 @@ export default function App() {
 
   const handleScenarioChange = useCallback((scen) => {
     engineRef.current.setScenario(scen);
+    syncSnapshot();
+  }, [syncSnapshot]);
+
+  // Machine Configuration Handler
+  const handleApplyMachineConfig = useCallback((config) => {
+    engineRef.current.setMachineConfig(config);
     syncSnapshot();
   }, [syncSnapshot]);
 
@@ -136,226 +133,157 @@ export default function App() {
     });
 
     syncSnapshot();
-    // Also navigate to dashboard or sync to show the explanation
-    setCurrentView('dashboard');
   }, [syncSnapshot]);
 
-  // Event stream item selected -> Load into Decision Engine
-  const handleSelectEvent = useCallback((event) => {
-    engineRef.current.lastDecision = {
-      id: event.id,
-      time: event.time,
-      eventType: event.eventType,
-      jobId: event.jobId,
-      jobName: event.jobName,
-      resourceType: event.resourceType,
-      subsystem: event.subsystem,
-      osConcept: event.osConcept,
-      whatHappened: event.whatHappened || event.reason,
-      whyItHappened: event.whyItHappened || 'Historical event from event stream',
-      decision: event.decision || event.reason,
-      manufacturingImpact: event.manufacturingImpact || 'Standard state transition.',
-      explanationData: event.explanationData,
-    };
-    syncSnapshot();
-    setCurrentView('dashboard');
-  }, [syncSnapshot]);
-
-  // Real-time discrete tick timer
+  // Main simulation tick loop
   useEffect(() => {
-    if (!snapshot.isRunning) return;
+    let animId;
+    let lastTickTime = performance.now();
 
-    const intervalMs = Math.max(100, Math.round(1000 / snapshot.speed));
+    const tick = (now) => {
+      if (engineRef.current.isRunning) {
+        const intervalMs = 1000 / engineRef.current.speed;
+        const elapsed = now - lastTickTime;
 
-    const timer = setInterval(() => {
-      const res = engineRef.current.step();
-      syncSnapshot();
-      if (res.completed) {
-        engineRef.current.isRunning = false;
-        syncSnapshot();
+        if (elapsed >= intervalMs) {
+          const res = engineRef.current.step();
+          syncSnapshot();
+          lastTickTime = now;
+
+          if (res.completed) {
+            engineRef.current.isRunning = false;
+            syncSnapshot();
+          } else if (res.deadlocked) {
+            engineRef.current.isRunning = false;
+            syncSnapshot();
+            if (currentViewRef.current !== 'simulator') {
+              setIsRecoveryModalOpen(true);
+            }
+          }
+        }
+      } else {
+        lastTickTime = now;
       }
-    }, intervalMs);
+      animId = requestAnimationFrame(tick);
+    };
 
-    return () => clearInterval(timer);
-  }, [snapshot.isRunning, snapshot.speed, syncSnapshot]);
+    animId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animId);
+  }, [syncSnapshot]);
 
   const inspectedJob = inspectedJobId ? snapshot.jobs[inspectedJobId] : null;
 
-  // Compute live safety state from Banker's algorithm
-  const matrices = engineRef.current.banker.buildMatrices(snapshot.jobs, snapshot.resourceTypes);
-  const safetyCheck = engineRef.current.banker.runSafetyAlgorithm(matrices);
-
-  const waitingCount = Object.values(snapshot.jobs).filter(
-    (j) => j.state === 'WAITING'
-  ).length;
-
   return (
-    <div className="min-h-screen bg-[#070a12] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-black">
-      {/* 1. Permanent Left Navigation Sidebar */}
-      <Sidebar
-        currentView={currentView}
-        onSelectView={setCurrentView}
-        isRunning={snapshot.isRunning}
-        time={snapshot.time}
-        hasDeadlock={snapshot.deadlockInfo.hasDeadlock}
-        waitingCount={waitingCount}
-        activeSubsystem={snapshot.activeSubsystem}
-        isMobileOpen={isMobileMenuOpen}
-        onCloseMobile={() => setIsMobileMenuOpen(false)}
-      />
-
-      {/* 2. Main Workspace Layout Area (Offset by lg:pl-64 for fixed sidebar) */}
-      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
-        {/* Top Header */}
-        <TopHeader
-          currentView={currentView}
-          time={snapshot.time}
-          isRunning={snapshot.isRunning}
-          hasDeadlock={snapshot.deadlockInfo.hasDeadlock}
-          bankerMode={snapshot.bankerMode}
-          isSafe={safetyCheck.isSafe}
-          algorithm={snapshot.algorithm}
-          quantum={snapshot.quantum}
-          speed={snapshot.speed}
-          scenario={snapshot.scenario}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onStep={handleStep}
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* 1. HOME LANDING PAGE */}
+      {currentView === 'home' && (
+        <HomePage
+          onSelectModule={(modId) => setCurrentView(modId)}
+          snapshot={snapshot}
           onReset={handleReset}
-          onSpeedChange={handleSpeedChange}
-          onAlgorithmChange={handleAlgorithmChange}
-          onQuantumChange={handleQuantumChange}
-          onBankerModeChange={handleBankerModeChange}
-          onScenarioChange={handleScenarioChange}
-          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          onOpenVivaGuide={() => setCurrentView('viva')}
+          onOpenViva={() => setCurrentView('viva')}
         />
+      )}
 
-        {/* Independently Scrollable Main Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
-          <div className="max-w-[1680px] mx-auto">
-            {/* VIEW 1: DASHBOARD */}
-            {currentView === 'dashboard' && (
-              <DashboardView
-                snapshot={snapshot}
-                onNavigateToView={setCurrentView}
-                onInspectJob={(id) => setInspectedJobId(id)}
-                onWhyWaiting={handleWhyWaiting}
-              />
-            )}
+      {/* 2. DEDICATED WORKSPACES */}
+      {['scheduler', 'simulator', 'resources', 'banker', 'deadlock', 'console'].includes(currentView) && (
+        <WorkspaceLayout
+          activeModuleId={currentView}
+          onNavigateModule={(modId) => setCurrentView(modId)}
+          onGoHome={() => setCurrentView('home')}
+          snapshot={snapshot}
+          onReset={handleReset}
+          onOpenViva={() => setCurrentView('viva')}
+        >
+          {currentView === 'scheduler' && (
+            <SchedulerWorkspace
+              snapshot={snapshot}
+              onAlgorithmChange={handleAlgorithmChange}
+              onQuantumChange={handleQuantumChange}
+              onScenarioChange={handleScenarioChange}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onStep={handleStep}
+              onReset={handleReset}
+              onInspectJob={(id) => setInspectedJobId(id)}
+              onWhyWaiting={handleWhyWaiting}
+            />
+          )}
 
-            {/* VIEW 2: FACTORY FLOOR */}
-            {currentView === 'factory-floor' && (
-              <FactoryFloorView
-                resourceTypes={snapshot.resourceTypes}
-                machineInstances={snapshot.machineInstances}
-                jobs={snapshot.jobs}
-                onInspectJob={(id) => setInspectedJobId(id)}
-                onWhyWaiting={handleWhyWaiting}
-              />
-            )}
+          {currentView === 'simulator' && (
+            <FactoryWorkspace
+              snapshot={snapshot}
+              onScenarioChange={handleScenarioChange}
+              onSpeedChange={handleSpeedChange}
+              onPlay={handlePlay}
+              onPause={handlePause}
+              onStep={handleStep}
+              onReset={handleReset}
+              onInspectJob={(id) => setInspectedJobId(id)}
+              onWhyWaiting={handleWhyWaiting}
+              onSelectEvent={(evt) => evt.jobId && setInspectedJobId(evt.jobId)}
+              onNavigateModule={(modId) => setCurrentView(modId)}
+            />
+          )}
 
-            {/* VIEW 3: PROCESS MANAGER */}
-            {currentView === 'processes' && (
-              <ProcessManagerView
-                jobs={snapshot.jobs}
-                onInspectJob={(id) => setInspectedJobId(id)}
-                onWhyWaiting={handleWhyWaiting}
-              />
-            )}
+          {currentView === 'resources' && (
+            <ResourcesWorkspace
+              snapshot={snapshot}
+              onApplyMachineConfig={handleApplyMachineConfig}
+              onInspectJob={(id) => setInspectedJobId(id)}
+              onWhyWaiting={handleWhyWaiting}
+            />
+          )}
 
-            {/* VIEW 4: RESOURCE MANAGER */}
-            {currentView === 'resources' && (
-              <ResourceManagerView
-                resourceTypes={snapshot.resourceTypes}
-                machineInstances={snapshot.machineInstances}
-                jobs={snapshot.jobs}
-                semaphores={snapshot.semaphores}
-                onInspectJob={(id) => setInspectedJobId(id)}
-              />
-            )}
+          {currentView === 'banker' && (
+            <BankerWorkspace
+              banker={engineRef.current.banker}
+              snapshot={snapshot}
+              onBankerModeChange={handleBankerModeChange}
+            />
+          )}
 
-            {/* VIEW 5: SYSTEM BRAIN */}
-            {currentView === 'brain' && (
-              <SystemBrainView
-                activeSubsystem={snapshot.activeSubsystem}
-                snapshot={snapshot}
-              />
-            )}
+          {currentView === 'deadlock' && (
+            <DeadlockWorkspace
+              snapshot={snapshot}
+              onScenarioChange={handleScenarioChange}
+              onStep={handleStep}
+              onReset={handleReset}
+              onExecuteRecovery={handleExecuteRecovery}
+            />
+          )}
 
-            {/* VIEW 6: SYNCHRONIZATION */}
-            {currentView === 'sync' && (
-              <SynchronizationView
-                semaphores={snapshot.semaphores}
-                resourceTypes={snapshot.resourceTypes}
-                jobs={snapshot.jobs}
-                eventLog={snapshot.eventLog}
-                onInspectJob={(id) => setInspectedJobId(id)}
-              />
-            )}
+          {currentView === 'console' && (
+            <ConsoleWorkspace
+              engine={engineRef.current}
+              snapshot={snapshot}
+              onStateChange={syncSnapshot}
+            />
+          )}
+        </WorkspaceLayout>
+      )}
 
-            {/* VIEW 7: BANKER'S SAFETY */}
-            {currentView === 'banker' && (
-              <BankersSafetyView
-                banker={engineRef.current.banker}
-                jobs={snapshot.jobs}
-                resourceTypes={snapshot.resourceTypes}
-              />
-            )}
-
-            {/* VIEW 8: DEADLOCK & RAG */}
-            {currentView === 'deadlock' && (
-              <DeadlockView
-                deadlockInfo={snapshot.deadlockInfo}
-                jobs={snapshot.jobs}
-                resourceTypes={snapshot.resourceTypes}
-                onNavigateToRecovery={() => setCurrentView('recovery')}
-              />
-            )}
-
-            {/* VIEW 9: DEADLOCK RECOVERY */}
-            {currentView === 'recovery' && (
-              <RecoveryView
-                deadlockInfo={snapshot.deadlockInfo}
-                jobs={snapshot.jobs}
-                resourceTypes={snapshot.resourceTypes}
-                onExecuteRecovery={handleExecuteRecovery}
-              />
-            )}
-
-            {/* VIEW 10: GANTT & METRICS */}
-            {currentView === 'gantt' && (
-              <GanttMetricsView
-                jobs={snapshot.jobs}
-                ganttRecords={snapshot.ganttRecords}
-                currentTime={snapshot.time}
-                metrics={snapshot.metrics}
-              />
-            )}
-
-            {/* VIEW 11: ALGORITHM LAB */}
-            {currentView === 'algorithms' && (
-              <AlgorithmLabView currentScenario={snapshot.scenario} />
-            )}
-
-            {/* VIEW 12: EVENT STREAM */}
-            {currentView === 'events' && (
-              <EventStreamView
-                eventLog={snapshot.eventLog}
-                onSelectEvent={handleSelectEvent}
-              />
-            )}
-
-            {/* VIEW 13: SYSTEM STATE */}
-            {currentView === 'state' && (
-              <SystemStateView snapshot={snapshot} />
-            )}
-
-            {/* VIEW 14: VIVA GUIDE */}
-            {currentView === 'viva' && <VivaGuideView />}
-          </div>
-        </main>
-      </div>
+      {/* 3. VIVA & DEFENSE THEORY GUIDE VIEW */}
+      {currentView === 'viva' && (
+        <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800 antialiased">
+          <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-xs">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
+              <button
+                onClick={() => setCurrentView('home')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+              >
+                <span>← Return to Home</span>
+              </button>
+              <span className="text-xs font-mono font-bold text-slate-500">
+                OS VIVA VOCE REFERENCE
+              </span>
+            </div>
+          </header>
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1">
+            <VivaGuideView onBackToHome={() => setCurrentView('home')} />
+          </main>
+        </div>
+      )}
 
       {/* PCB Inspection Modal */}
       <JobHistoryModal
@@ -364,14 +292,17 @@ export default function App() {
         job={inspectedJob}
       />
 
-      {/* Pop-up Recovery Modal */}
+      {/* Pop-up Recovery Modal on automatic deadlock encounter */}
       <DeadlockRecoveryModal
         isOpen={isRecoveryModalOpen}
         onClose={() => setIsRecoveryModalOpen(false)}
         deadlockInfo={snapshot.deadlockInfo}
         jobs={snapshot.jobs}
         resourceTypes={snapshot.resourceTypes}
-        onExecuteRecovery={handleExecuteRecovery}
+        onExecuteRecovery={(victimId) => {
+          handleExecuteRecovery(victimId);
+          setIsRecoveryModalOpen(false);
+        }}
       />
     </div>
   );

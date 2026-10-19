@@ -58,6 +58,7 @@ export class ResourceManager {
     sem.value = Math.max(0, rt.capacity - rt.allocated);
     rt.available = sem.value;
     rt.waitingQueue = [...sem.waitingQueue];
+    sem.allocatedJobs = assignedMachines.map((m) => m.currentJobId);
   }
 
   syncAll() {
@@ -143,7 +144,14 @@ export class ResourceManager {
    */
   release(resourceType, jobId, machineId, timestamp = 0) {
     const sem = this.semaphores[resourceType];
-    const machine = machineId ? this.machineInstances[machineId] : null;
+    let machine = machineId ? this.machineInstances[machineId] : null;
+
+    if (!machine && jobId) {
+      machine =
+        Object.values(this.machineInstances).find(
+          (m) => m.type === resourceType && m.currentJobId === jobId
+        ) || null;
+    }
 
     if (machine) {
       machine.state = ResourceState.IDLE;
@@ -154,14 +162,14 @@ export class ResourceManager {
       machine.currentBurstTotal = 0;
     }
 
-    const signalResult = sem.signal(jobId, timestamp);
+    const signalResult = sem ? sem.signal(jobId, timestamp) : { unblockedJobId: null, reason: '' };
 
     // Synchronize counters
     this.syncResourceType(resourceType);
 
     return {
-      releasedMachineId: machineId,
-      semaphoreValue: sem.value,
+      releasedMachineId: machine?.id || machineId,
+      semaphoreValue: sem ? sem.value : 0,
       unblockedJobId: signalResult.unblockedJobId,
       reason: signalResult.reason,
     };

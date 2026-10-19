@@ -57,8 +57,16 @@ export default function JobHistoryModal({ isOpen, onClose, job }) {
             <span className="text-emerald-400">{job.totalExecutionTime || 0}s</span>
           </div>
           <div>
-            <span className="text-slate-500 text-[10px] block">TOTAL WAITING:</span>
-            <span className="text-amber-400">{job.totalWaitingTime || 0}s</span>
+            <span className="text-slate-500 text-[10px] block">WAITING TIME (WT):</span>
+            <span className="text-amber-400 font-bold">{job.waitingTime ?? job.totalWaitingTime ?? 0}s</span>
+          </div>
+          <div>
+            <span className="text-slate-500 text-[10px] block">RESPONSE TIME (RT):</span>
+            <span className="text-blue-400 font-bold">{job.responseTime != null ? `${job.responseTime}s` : '—'}</span>
+          </div>
+          <div>
+            <span className="text-slate-500 text-[10px] block">TURNAROUND TIME (TAT):</span>
+            <span className="text-slate-200 font-bold">{job.turnaroundTime != null ? `${job.turnaroundTime}s` : '—'}</span>
           </div>
           <div>
             <span className="text-slate-500 text-[10px] block">ALLOCATED CELL:</span>

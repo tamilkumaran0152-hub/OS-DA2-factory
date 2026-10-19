@@ -3,18 +3,34 @@ import { AlertOctagon, CheckCircle2, XCircle, ShieldAlert, Wrench, RefreshCw, In
 
 export default function ResourceAllocationGraph({
   deadlockInfo,
+  ragData,
+  cycleNodes: propCycleNodes,
   onOpenRecoveryModal,
-  jobs,
-  resourceTypes,
+  jobs: _jobs = {},
+  resourceTypes: _resourceTypes = {},
 }) {
-  const { hasDeadlock, cycleNodes = [], cycleString, coffman, rag } = deadlockInfo;
-  const nodes = rag?.nodes || [];
-  const edges = rag?.edges || [];
+  const effectiveInfo = deadlockInfo || {
+    hasDeadlock: false,
+    hasCycle: (propCycleNodes || []).length > 0,
+    cycleNodes: propCycleNodes || [],
+    cycleString: '',
+    coffman: null,
+    rag: ragData || { nodes: [], edges: [] },
+  };
+
+  const hasDeadlock = Boolean(effectiveInfo.hasDeadlock);
+  const hasCycle = Boolean(effectiveInfo.hasCycle ?? (effectiveInfo.cycleNodes?.length > 0));
+  const cycleNodes = effectiveInfo.cycleNodes || propCycleNodes || [];
+  const cycleString = effectiveInfo.cycleString || '';
+  const coffman = effectiveInfo.coffman || null;
+  const rag = effectiveInfo.rag || ragData || { nodes: [], edges: [] };
+  const nodes = Array.isArray(rag?.nodes) ? rag.nodes : [];
+  const edges = Array.isArray(rag?.edges) ? rag.edges : [];
 
   // Layout positions in SVG
-  // Place Processes on the Left (x=160), Resources on the Right (x=480)
-  const processNodes = nodes.filter((n) => n.type === 'PROCESS');
-  const resourceNodes = nodes.filter((n) => n.type === 'RESOURCE');
+  // Place Processes on the Left (x=140), Resources on the Right (x=500)
+  const processNodes = nodes.filter((n) => n?.type === 'PROCESS');
+  const resourceNodes = nodes.filter((n) => n?.type === 'RESOURCE');
 
   const svgWidth = 640;
   const svgHeight = Math.max(380, Math.max(processNodes.length, resourceNodes.length) * 65 + 60);
@@ -30,6 +46,32 @@ export default function ResourceAllocationGraph({
     const y = 50 + idx * ((svgHeight - 100) / Math.max(1, resourceNodes.length - 1 || 1));
     nodePositions[r.id] = { x: 500, y, type: 'RESOURCE', ...r };
   });
+
+  const defaultConditions = [
+    {
+      name: 'Mutual Exclusion',
+      satisfied: true,
+      explanation:
+        'Factory machine fixtures (CNC, Welding, Assembly, Painting, Packaging) are non-shareable resources; each physical machine instance can only process one workpiece fixture exclusively at a time.',
+    },
+    {
+      name: 'Hold and Wait',
+      satisfied: false,
+      explanation: 'No process is currently holding resources while simultaneously waiting for another.',
+    },
+    {
+      name: 'No Preemption',
+      satisfied: true,
+      explanation: 'Workpieces mounted in active machine fixtures cannot be preempted or forcibly unloaded without damaging the product.',
+    },
+    {
+      name: 'Circular Wait',
+      satisfied: false,
+      cyclePath: '',
+      explanation: 'No circular wait cycle detected in the Resource Allocation Graph.',
+    },
+  ];
+  const conditions = coffman?.conditions?.length ? coffman.conditions : defaultConditions;
 
   return (
     <div className="space-y-4">
@@ -51,15 +93,22 @@ export default function ResourceAllocationGraph({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/40 text-xs font-bold animate-pulse">
               <AlertOctagon className="w-4 h-4" />
-              <span>DEADLOCK CONFIRMED (CYCLE DETECTED)</span>
+              <span>DEADLOCK CONFIRMED</span>
             </div>
-            <button
-              onClick={onOpenRecoveryModal}
-              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>Resolve Deadlock</span>
-            </button>
+            {onOpenRecoveryModal && (
+              <button
+                onClick={onOpenRecoveryModal}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Resolve Deadlock</span>
+              </button>
+            )}
+          </div>
+        ) : hasCycle ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold">
+            <AlertOctagon className="w-4 h-4 text-amber-400" />
+            <span>Circular dependency detected — progress still possible</span>
           </div>
         ) : (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-xs font-bold">
@@ -83,203 +132,225 @@ export default function ResourceAllocationGraph({
               <span className="flex items-center gap-1">
                 <span className="w-3 h-0.5 border-t border-dashed border-amber-400 inline-block" /> Request (P → R)
               </span>
-              {hasDeadlock && (
+              {hasDeadlock ? (
                 <span className="flex items-center gap-1 text-rose-400 font-bold">
                   <span className="w-3 h-1 bg-rose-500 inline-block animate-pulse" /> Deadlocked Cycle
                 </span>
-              )}
+              ) : hasCycle ? (
+                <span className="flex items-center gap-1 text-amber-400 font-bold">
+                  <span className="w-3 h-1 bg-amber-500 inline-block" /> Dependency Cycle
+                </span>
+              ) : null}
             </div>
           </div>
 
           <div className="bg-slate-950/80 rounded-xl border border-slate-800/80 p-2 overflow-x-auto flex justify-center">
-            <svg width={svgWidth} height={svgHeight} className="overflow-visible select-none">
-              <defs>
-                {/* Standard Arrowheads */}
-                <marker
-                  id="arrow-alloc"
-                  viewBox="0 0 10 10"
-                  refX="18"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
-                </marker>
-                <marker
-                  id="arrow-req"
-                  viewBox="0 0 10 10"
-                  refX="22"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
-                </marker>
-                <marker
-                  id="arrow-cycle"
-                  viewBox="0 0 10 10"
-                  refX="20"
-                  refY="5"
-                  markerWidth="7"
-                  markerHeight="7"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
-                </marker>
-              </defs>
+            {processNodes.length === 0 && resourceNodes.length === 0 ? (
+              <div className="py-12 px-4 text-center text-slate-400 text-xs space-y-1">
+                <CheckCircle2 className="w-7 h-7 text-emerald-400 mx-auto mb-1 opacity-80" />
+                <p className="font-semibold text-slate-300">No deadlock detected — current Resource Allocation Graph is acyclic.</p>
+                <p className="text-[11px] text-slate-500">No active process or resource nodes currently registered in the RAG.</p>
+              </div>
+            ) : (
+              <svg width={svgWidth} height={svgHeight} className="overflow-visible select-none">
+                <defs>
+                  {/* Standard Arrowheads */}
+                  <marker
+                    id="arrow-alloc"
+                    viewBox="0 0 10 10"
+                    refX="18"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+                  </marker>
+                  <marker
+                    id="arrow-req"
+                    viewBox="0 0 10 10"
+                    refX="22"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#f59e0b" />
+                  </marker>
+                  <marker
+                    id="arrow-cycle"
+                    viewBox="0 0 10 10"
+                    refX="20"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e" />
+                  </marker>
+                </defs>
 
-              {/* Draw Edges */}
-              {edges.map((edge, idx) => {
-                const source = nodePositions[edge.from];
-                const target = nodePositions[edge.to];
-                if (!source || !target) return null;
+                {/* Draw Edges */}
+                {edges.map((edge, idx) => {
+                  const source = nodePositions[edge.from];
+                  const target = nodePositions[edge.to];
+                  if (!source || !target) return null;
 
-                const isAlloc = edge.type === 'ALLOCATION';
-                // Check if this edge is in the cycle
-                const isInCycle =
-                  hasDeadlock &&
-                  cycleNodes.includes(edge.from) &&
-                  cycleNodes.includes(edge.to);
+                  const isAlloc = edge.type === 'ALLOCATION';
+                  // Check if this edge is in the cycle
+                  const isInCycle =
+                    hasDeadlock &&
+                    cycleNodes.includes(edge.from) &&
+                    cycleNodes.includes(edge.to);
 
-                // Curve path
-                const dx = target.x - source.x;
-                const dy = target.y - source.y;
-                const cx1 = source.x + dx * 0.4;
-                const cy1 = source.y;
-                const cx2 = source.x + dx * 0.6;
-                const cy2 = target.y;
+                  // Curve path
+                  const dx = target.x - source.x;
+                  const dy = target.y - source.y;
+                  const cx1 = source.x + dx * 0.4;
+                  const cy1 = source.y;
+                  const cx2 = source.x + dx * 0.6;
+                  const cy2 = target.y;
 
-                const pathD = `M ${source.x} ${source.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${target.x} ${target.y}`;
+                  const pathD = `M ${source.x} ${source.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${target.x} ${target.y}`;
 
-                return (
-                  <g key={idx}>
-                    <path
-                      d={pathD}
-                      fill="none"
-                      stroke={
-                        isInCycle
-                          ? '#f43f5e'
-                          : isAlloc
-                          ? '#10b981'
-                          : '#f59e0b'
-                      }
-                      strokeWidth={isInCycle ? '3' : '1.8'}
-                      strokeDasharray={isAlloc ? 'none' : '4,3'}
-                      markerEnd={
-                        isInCycle
-                          ? 'url(#arrow-cycle)'
-                          : isAlloc
-                          ? 'url(#arrow-alloc)'
-                          : 'url(#arrow-req)'
-                      }
-                      className={isInCycle ? 'animate-pulse' : ''}
-                    />
-                  </g>
-                );
-              })}
-
-              {/* Draw Process Nodes (Circles on left) */}
-              {processNodes.map((p) => {
-                const pos = nodePositions[p.id];
-                if (!pos) return null;
-                const isInCycle = hasDeadlock && cycleNodes.includes(p.id);
-
-                return (
-                  <g key={p.id} className="cursor-pointer">
-                    <circle
-                      cx={pos.x}
-                      cy={pos.y}
-                      r="20"
-                      fill={isInCycle ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.9)'}
-                      stroke={isInCycle ? '#f43f5e' : '#3b82f6'}
-                      strokeWidth={isInCycle ? '2.5' : '1.5'}
-                      className={isInCycle ? 'animate-pulse' : ''}
-                    />
-                    <text
-                      x={pos.x}
-                      y={pos.y + 4}
-                      textAnchor="middle"
-                      fill={isInCycle ? '#fb7185' : '#60a5fa'}
-                      fontSize="10"
-                      fontFamily="JetBrains Mono"
-                      fontWeight="bold"
-                    >
-                      {p.label}
-                    </text>
-                    <text
-                      x={pos.x - 28}
-                      y={pos.y + 3}
-                      textAnchor="end"
-                      fill="#94a3b8"
-                      fontSize="9"
-                      fontFamily="Outfit"
-                    >
-                      {p.name}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Draw Resource Nodes (Rectangles with capacity dots on right) */}
-              {resourceNodes.map((r) => {
-                const pos = nodePositions[r.id];
-                if (!pos) return null;
-                const isInCycle = hasDeadlock && cycleNodes.includes(r.id);
-
-                return (
-                  <g key={r.id}>
-                    <rect
-                      x={pos.x - 45}
-                      y={pos.y - 18}
-                      width="90"
-                      height="36"
-                      rx="6"
-                      fill={isInCycle ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.9)'}
-                      stroke={isInCycle ? '#f43f5e' : r.color || '#f59e0b'}
-                      strokeWidth={isInCycle ? '2.5' : '1.5'}
-                      className={isInCycle ? 'animate-pulse' : ''}
-                    />
-                    <text
-                      x={pos.x}
-                      y={pos.y - 2}
-                      textAnchor="middle"
-                      fill={isInCycle ? '#fb7185' : '#f8fafc'}
-                      fontSize="10"
-                      fontFamily="Outfit"
-                      fontWeight="bold"
-                    >
-                      {r.label}
-                    </text>
-
-                    {/* Capacity instance dots */}
-                    <g transform={`translate(${pos.x - (r.capacity * 6)}, ${pos.y + 8})`}>
-                      {Array.from({ length: r.capacity }).map((_, i) => (
-                        <circle
-                          key={i}
-                          cx={i * 12 + 6}
-                          cy="0"
-                          r="3"
-                          fill={i < r.allocated ? '#f43f5e' : '#10b981'}
-                        />
-                      ))}
+                  return (
+                    <g key={idx}>
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke={
+                          isInCycle
+                            ? '#f43f5e'
+                            : isAlloc
+                            ? '#10b981'
+                            : '#f59e0b'
+                        }
+                        strokeWidth={isInCycle ? '3' : '1.8'}
+                        strokeDasharray={isAlloc ? 'none' : '4,3'}
+                        markerEnd={
+                          isInCycle
+                            ? 'url(#arrow-cycle)'
+                            : isAlloc
+                            ? 'url(#arrow-alloc)'
+                            : 'url(#arrow-req)'
+                        }
+                        className={isInCycle ? 'animate-pulse' : ''}
+                      />
                     </g>
-                  </g>
-                );
-              })}
-            </svg>
+                  );
+                })}
+
+                {/* Draw Process Nodes (Circles on left) */}
+                {processNodes.map((p) => {
+                  const pos = nodePositions[p.id];
+                  if (!pos) return null;
+                  const isInCycle = hasDeadlock && cycleNodes.includes(p.id);
+
+                  return (
+                    <g key={p.id} className="cursor-pointer">
+                      <circle
+                        cx={pos.x}
+                        cy={pos.y}
+                        r="20"
+                        fill={isInCycle ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.9)'}
+                        stroke={isInCycle ? '#f43f5e' : '#3b82f6'}
+                        strokeWidth={isInCycle ? '2.5' : '1.5'}
+                        className={isInCycle ? 'animate-pulse' : ''}
+                      />
+                      <text
+                        x={pos.x}
+                        y={pos.y + 4}
+                        textAnchor="middle"
+                        fill={isInCycle ? '#fb7185' : '#60a5fa'}
+                        fontSize="10"
+                        fontFamily="JetBrains Mono"
+                        fontWeight="bold"
+                      >
+                        {p.label}
+                      </text>
+                      <text
+                        x={pos.x - 28}
+                        y={pos.y + 3}
+                        textAnchor="end"
+                        fill="#94a3b8"
+                        fontSize="9"
+                        fontFamily="Outfit"
+                      >
+                        {p.name}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Draw Resource Nodes (Rectangles with capacity dots on right) */}
+                {resourceNodes.map((r) => {
+                  const pos = nodePositions[r.id];
+                  if (!pos) return null;
+                  const isInCycle = hasDeadlock && cycleNodes.includes(r.id);
+
+                  return (
+                    <g key={r.id}>
+                      <rect
+                        x={pos.x - 45}
+                        y={pos.y - 18}
+                        width="90"
+                        height="36"
+                        rx="6"
+                        fill={isInCycle ? 'rgba(244, 63, 94, 0.2)' : 'rgba(15, 23, 42, 0.9)'}
+                        stroke={isInCycle ? '#f43f5e' : r.color || '#f59e0b'}
+                        strokeWidth={isInCycle ? '2.5' : '1.5'}
+                        className={isInCycle ? 'animate-pulse' : ''}
+                      />
+                      <text
+                        x={pos.x}
+                        y={pos.y - 2}
+                        textAnchor="middle"
+                        fill={isInCycle ? '#fb7185' : '#f8fafc'}
+                        fontSize="10"
+                        fontFamily="Outfit"
+                        fontWeight="bold"
+                      >
+                        {r.label}
+                      </text>
+
+                      {/* Capacity instance dots */}
+                      <g transform={`translate(${pos.x - (r.capacity * 6)}, ${pos.y + 8})`}>
+                        {Array.from({ length: r.capacity }).map((_, i) => (
+                          <circle
+                            key={i}
+                            cx={i * 12 + 6}
+                            cy="0"
+                            r="3"
+                            fill={i < r.allocated ? '#f43f5e' : '#10b981'}
+                          />
+                        ))}
+                      </g>
+                    </g>
+                  );
+                })}
+              </svg>
+            )}
           </div>
 
-          {hasDeadlock && (
+          {hasDeadlock ? (
             <div className="mt-3 p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-center justify-between">
               <span>CIRCULAR CHAIN: {cycleString}</span>
-              <button
-                onClick={onOpenRecoveryModal}
-                className="underline hover:text-rose-100 font-bold"
-              >
-                Launch Recovery →
-              </button>
+              {onOpenRecoveryModal && (
+                <button
+                  onClick={onOpenRecoveryModal}
+                  className="underline hover:text-rose-100 font-bold"
+                >
+                  Launch Recovery →
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 text-xs text-emerald-300 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span>No deadlock detected — current Resource Allocation Graph is acyclic.</span>
+              </div>
+              <span className="text-[10px] font-mono text-emerald-400/80">0 Cycles</span>
             </div>
           )}
         </div>
@@ -295,7 +366,7 @@ export default function ResourceAllocationGraph({
             </p>
 
             <div className="space-y-2.5">
-              {coffman?.conditions?.map((cond, idx) => (
+              {conditions.map((cond, idx) => (
                 <div
                   key={idx}
                   className={`p-2.5 rounded-xl border text-xs transition ${

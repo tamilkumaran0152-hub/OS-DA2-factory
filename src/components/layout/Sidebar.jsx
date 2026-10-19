@@ -15,6 +15,7 @@ import {
   Database,
   BookOpen,
   Cpu,
+  Activity,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -32,61 +33,48 @@ export default function Sidebar({
     {
       title: 'OVERVIEW',
       items: [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'dashboard', label: 'Operations Overview', icon: LayoutDashboard },
       ],
     },
     {
-      title: 'OPERATIONS',
+      title: 'KERNEL MODULES',
       items: [
-        { id: 'factory-floor', label: 'Factory Floor', icon: Factory },
         {
-          id: 'processes',
-          label: 'Process Manager',
+          id: 'scheduler',
+          label: 'Process Scheduler',
           icon: Layers,
           badge: waitingCount > 0 ? `${waitingCount} wait` : null,
           badgeColor: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
         },
+        { id: 'simulator', label: 'Factory Simulator', icon: Factory },
         { id: 'resources', label: 'Resource Manager', icon: Box },
-      ],
-    },
-    {
-      title: 'OS CONCEPTS',
-      items: [
-        { id: 'brain', label: 'System Brain', icon: Brain },
-        { id: 'sync', label: 'Synchronization', icon: Lock },
-        { id: 'banker', label: "Banker's Safety", icon: ShieldCheck },
+        { id: 'banker', label: "Banker's Safety Lab", icon: ShieldCheck },
         {
           id: 'deadlock',
-          label: 'Deadlock & RAG',
+          label: 'Deadlock Lab',
           icon: AlertOctagon,
           badge: hasDeadlock ? 'ALERT' : null,
           badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse',
         },
-        {
-          id: 'recovery',
-          label: 'Recovery',
-          icon: RefreshCw,
-          badge: hasDeadlock ? 'Action' : null,
-          badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
-        },
+        { id: 'console', label: 'Kernel Console', icon: Terminal },
       ],
     },
     {
-      title: 'ANALYSIS',
+      title: 'REFERENCE',
       items: [
-        { id: 'gantt', label: 'Gantt & Metrics', icon: BarChart3 },
-        { id: 'algorithms', label: 'Algorithm Lab', icon: Sliders },
-        { id: 'events', label: 'Event Stream', icon: Terminal },
-        { id: 'state', label: 'System State', icon: Database },
-      ],
-    },
-    {
-      title: 'LEARNING',
-      items: [
-        { id: 'viva', label: 'Viva Guide', icon: BookOpen },
+        { id: 'viva', label: 'Viva & Theory Guide', icon: BookOpen },
       ],
     },
   ];
+
+  const isItemActive = (itemId) => {
+    if (currentView === itemId) return true;
+    if (itemId === 'scheduler' && ['processes', 'gantt', 'algorithms'].includes(currentView)) return true;
+    if (itemId === 'simulator' && ['factory-floor', 'events', 'brain'].includes(currentView)) return true;
+    if (itemId === 'resources' && ['sync', 'config'].includes(currentView)) return true;
+    if (itemId === 'deadlock' && ['recovery'].includes(currentView)) return true;
+    return false;
+  };
 
   return (
     <>
@@ -136,7 +124,7 @@ export default function Sidebar({
               <div className="space-y-0.5">
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentView === item.id;
+                  const isActive = isItemActive(item.id);
 
                   return (
                     <button

@@ -17,7 +17,7 @@ const VIVA_CATEGORIES = [
     id: 'PROCESS_MANAGEMENT',
     name: 'Process Management',
     icon: Cpu,
-    color: 'text-cyan-400',
+    color: 'text-blue-600',
     questions: [
       {
         q: 'How does a manufacturing job map to an Operating System process (PCB)?',
@@ -37,7 +37,7 @@ const VIVA_CATEGORIES = [
     id: 'CPU_SCHEDULING',
     name: 'CPU Scheduling',
     icon: Factory,
-    color: 'text-blue-400',
+    color: 'text-indigo-600',
     questions: [
       {
         q: 'Why does SJF (Shortest Job First) achieve the lowest average waiting time?',
@@ -61,7 +61,7 @@ const VIVA_CATEGORIES = [
     id: 'SYNCHRONIZATION',
     name: 'Synchronization',
     icon: Lock,
-    color: 'text-emerald-400',
+    color: 'text-amber-600',
     questions: [
       {
         q: 'Why is CNC represented using a counting semaphore?',
@@ -81,7 +81,7 @@ const VIVA_CATEGORIES = [
     id: 'BANKERS_ALGORITHM',
     name: "Banker's Algorithm",
     icon: ShieldCheck,
-    color: 'text-purple-400',
+    color: 'text-purple-600',
     questions: [
       {
         q: "What is Banker's Algorithm and how does it prevent deadlocks?",
@@ -101,7 +101,7 @@ const VIVA_CATEGORIES = [
     id: 'DEADLOCK',
     name: 'Deadlock & RAG',
     icon: AlertOctagon,
-    color: 'text-rose-400',
+    color: 'text-rose-600',
     questions: [
       {
         q: 'What are the 4 Coffman Conditions required for deadlock?',
@@ -117,7 +117,7 @@ const VIVA_CATEGORIES = [
     id: 'RECOVERY',
     name: 'Recovery',
     icon: RefreshCw,
-    color: 'text-pink-400',
+    color: 'text-pink-600',
     questions: [
       {
         q: 'How does Smart Factory OS select a deadlock victim?',
@@ -133,7 +133,7 @@ const VIVA_CATEGORIES = [
     id: 'FACTORY_MAPPING',
     name: 'Factory Mapping',
     icon: Factory,
-    color: 'text-amber-400',
+    color: 'text-emerald-600',
     questions: [
       {
         q: 'Provide a complete summary of the OS to Manufacturing mapping.',
@@ -143,7 +143,7 @@ const VIVA_CATEGORIES = [
   },
 ];
 
-export default function VivaGuideView() {
+export default function VivaGuideView({ onBackToHome }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [openQuestions, setOpenQuestions] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -165,42 +165,53 @@ export default function VivaGuideView() {
   }).filter(Boolean);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* 1. Header Banner */}
-      <div className="bg-[#0e1422] border border-slate-800/90 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-100">
+            <BookOpen className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-base font-bold tracking-tight text-slate-900">
               OPERATING SYSTEMS VIVA & DEFENSE GUIDE
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-slate-500 mt-1">
             Concise conceptual defense answers mapping OS textbook theory to Smart Factory implementations
           </p>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative min-w-[240px]">
-          <input
-            type="text"
-            placeholder="Search OS questions..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-950 text-slate-200 text-xs pl-8 pr-3 py-1.5 rounded-lg border border-slate-800 focus:outline-none focus:border-indigo-400 font-mono"
-          />
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+        <div className="flex items-center gap-3">
+          {/* Search Bar */}
+          <div className="relative min-w-[260px]">
+            <input
+              type="text"
+              placeholder="Search OS concepts & questions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 text-slate-800 text-xs pl-8 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-400 focus:bg-white transition"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+          </div>
+
+          {onBackToHome && (
+            <button
+              onClick={onBackToHome}
+              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition border border-slate-200 whitespace-nowrap"
+            >
+              ← Back to Home
+            </button>
+          )}
         </div>
       </div>
 
       {/* 2. Category Filter Pills */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs font-mono">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
         <button
           onClick={() => setSelectedCategory('ALL')}
-          className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-xl font-semibold transition whitespace-nowrap ${
             selectedCategory === 'ALL'
-              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-              : 'bg-[#0e1422] text-slate-400 hover:text-slate-200 border border-slate-800'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
           }`}
         >
           ALL TOPICS
@@ -210,10 +221,10 @@ export default function VivaGuideView() {
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
-            className={`px-3 py-1.5 rounded-lg font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl font-semibold transition whitespace-nowrap flex items-center gap-1.5 ${
               selectedCategory === cat.id
-                ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
-                : 'bg-[#0e1422] text-slate-400 hover:text-slate-200 border border-slate-800'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50'
             }`}
           >
             <span>{cat.name}</span>
@@ -227,14 +238,14 @@ export default function VivaGuideView() {
           const Icon = cat.icon;
 
           return (
-            <div key={cat.id} className="bg-[#0e1422] border border-slate-800/90 rounded-xl p-4 shadow-sm space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-slate-800 text-xs font-bold font-mono">
+            <div key={cat.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-xs font-bold">
                 <Icon className={`w-4 h-4 ${cat.color}`} />
-                <span className="text-slate-200 uppercase tracking-wider">{cat.name}</span>
-                <span className="text-slate-500 text-[10px]">({cat.questions.length} questions)</span>
+                <span className="text-slate-900 uppercase tracking-wider">{cat.name}</span>
+                <span className="text-slate-400 font-normal">({cat.questions.length} questions)</span>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {cat.questions.map((item, qIdx) => {
                   const key = `${cat.id}-${qIdx}`;
                   const isOpen = openQuestions[key];
@@ -242,27 +253,27 @@ export default function VivaGuideView() {
                   return (
                     <div
                       key={qIdx}
-                      className="rounded-lg bg-slate-950 border border-slate-800 overflow-hidden transition"
+                      className="rounded-xl bg-slate-50 border border-slate-200/80 overflow-hidden transition"
                     >
                       <button
                         onClick={() => toggleQuestion(cat.id, qIdx)}
-                        className="w-full p-3 text-left text-xs font-semibold text-slate-200 hover:text-cyan-300 flex items-center justify-between gap-3 transition"
+                        className="w-full p-3.5 text-left text-xs font-semibold text-slate-800 hover:text-indigo-600 flex items-center justify-between gap-3 transition"
                       >
                         <span className="flex items-center gap-2">
-                          <span className="text-cyan-400 font-mono">Q{qIdx + 1}:</span>
+                          <span className="text-indigo-600 font-mono font-bold">Q{qIdx + 1}:</span>
                           <span>{item.q}</span>
                         </span>
                         {isOpen ? (
-                          <ChevronUp className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                          <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                          <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
                         )}
                       </button>
 
                       {isOpen && (
-                        <div className="p-3.5 pt-0 text-xs text-slate-300 leading-relaxed border-t border-slate-900 bg-[#0c121e]">
-                          <div className="whitespace-pre-line pl-6 relative">
-                            <span className="absolute left-0 top-0 text-emerald-400 font-mono font-bold">
+                        <div className="p-4 pt-0 text-xs text-slate-700 leading-relaxed border-t border-slate-200/50 bg-white">
+                          <div className="whitespace-pre-line pl-6 relative pt-3">
+                            <span className="absolute left-0 top-3 text-emerald-600 font-mono font-bold">
                               A:
                             </span>
                             {item.a}
